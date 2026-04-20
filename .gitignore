@@ -1,0 +1,55 @@
+# --- General ---
+.idea/
+*.iml
+*.iws
+*.ipr
+.DS_Store
+.history
+*.log
+tmp/
+
+# --- Server (Go) ---
+server/server
+server/server.exe
+server/.env
+server/uploads/
+# If you have specific build artifacts in server
+server/bin/
+
+# --- Client (Flutter) ---
+client/.dart_tool/
+client/.flutter-plugins
+client/.flutter-plugins-dependencies
+client/.pub-cache/
+client/.pub/
+client/build/
+client/.metadata
+
+# Android specific
+client/android/app/debug
+client/android/app/profile
+client/android/app/release
+client/android/local.properties
+client/android/**/generated
+client/android/key.properties
+
+# iOS specific
+client/ios/.generated
+client/ios/Flutter/Generated.xcconfig
+client/ios/Flutter/flutter_export_environment.sh
+client/ios/Flutter/App.framework
+client/ios/Flutter/Flutter.framework
+client/ios/Flutter/Flutter.podspec
+client/ios/DerivedData
+
+# Web specific
+client/build/web
+
+# Desktop specific
+client/linux/flutter/ephemeral
+client/macos/Flutter/ephemeral
+client/windows/flutter/ephemeral
+
+# --- Misc ---
+.vscode/
+node_modules/

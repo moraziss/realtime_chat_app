@@ -1,0 +1,49 @@
+name: realtime_chat_app
+description: "Мессенджер с совместными задачами"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  provider: ^6.1.2
+  cupertino_icons: ^1.0.8
+  image_picker: ^1.0.7
+  path_provider: ^2.1.2
+  file_picker: ^8.0.0
+  url_launcher: ^6.2.6
+
+  # UI чата
+  flutter_chat_ui: ^2.0.0
+  flutter_chat_core: ^2.9.0
+  flutter_chat_types: ^3.6.2
+  flyer_chat_text_message: ^2.6.0
+
+  # HTTP запросы к Go бэкенду
+  http: ^1.2.0
+
+  # WebSocket
+  web_socket_channel: ^3.0.0
+
+  # Хранение токена между сессиями
+  shared_preferences: ^2.2.2
+
+  # Навигация
+  go_router: ^17.2.0
+
+  # UUID для сообщений
+  uuid: ^4.3.3
+  flutter_staggered_animations: ^1.1.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+

@@ -1,0 +1,72 @@
+-- Расширение для генерации UUID
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+-- 1. Таблица пользователей
+CREATE TABLE IF NOT EXISTS users (
+    id              UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    name            VARCHAR(65)  NOT NULL UNIQUE,
+    email           VARCHAR(255) NOT NULL UNIQUE,
+    hashed_password VARCHAR(255) NOT NULL,
+    avatar_url      TEXT,
+    bio             TEXT,
+    settings        JSONB DEFAULT '{}'::jsonb,
+    created_at      TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+-- 2. Таблица комнат
+CREATE TABLE IF NOT EXISTS rooms (
+    id         UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    name       VARCHAR(255),
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+-- 3. Таблица связи пользователей и комнат
+CREATE TABLE IF NOT EXISTS user_rooms (
+    user_id    UUID REFERENCES users(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    room_id    UUID REFERENCES rooms(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_user_room UNIQUE (user_id, room_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_rooms ON user_rooms (user_id, room_id);
+
+-- 4. Таблица сообщений (с полем metadata для задач)
+CREATE TABLE IF NOT EXISTS conversations (
+    id         UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    text       TEXT NOT NULL,
+    user_id    UUID REFERENCES users(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    room_id    UUID REFERENCES rooms(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    metadata   JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_conversations_room ON conversations (room_id);
+
+-- 5. Таблица задач
+CREATE TABLE IF NOT EXISTS tasks (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    room_id UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+    created_by UUID NOT NULL REFERENCES users(id),
+    assigned_to UUID REFERENCES users(id),
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    status VARCHAR(50) DEFAULT 'todo',
+    priority VARCHAR(20) DEFAULT 'medium',
+    due_date TIMESTAMP,
+    subtasks JSONB DEFAULT '[]'::jsonb,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_tasks_room ON tasks (room_id);
+
+-- Таблица для временных кодов регистрации
+CREATE TABLE IF NOT EXISTS verification_codes (
+    email VARCHAR(255) PRIMARY KEY,
+    code VARCHAR(6) NOT NULL,
+    expires_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
