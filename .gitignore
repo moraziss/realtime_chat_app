@@ -1,0 +1,46 @@
+# Environment & Secrets
+.env
+.env.*
+!.env.example
+
+# Binaries & Executables
+/server
+/main
+*.exe
+*.dll
+*.so
+*.dylib
+bin/
+dist/
+
+# User Uploads (игнорируем содержимое, сохраняя папку)
+/uploads/*
+!/uploads/.gitkeep
+
+# IDEs (GoLand / VS Code)
+.idea/
+.vscode/
+*.iw
+*.iws
+*.ipr
+real.txt
+
+# OS Generated Files
+.DS_Store
+Thumbs.db
+
+# Go Tests & Coverage
+*.test
+*.out
+*.prof
+coverage.txt
+
+# Database & Logs
+*.log
+*.sqlite
+*.db
+
+# Dart/Flutter (если файлы Dart останутся в проекте)
+.dart_tool/
+.packages
+build/
