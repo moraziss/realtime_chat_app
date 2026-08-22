@@ -166,9 +166,13 @@ func NewUpdateTaskService(repo repository.Task, chatHub *chat2.Chat) UpdateTask 
 			// Чтобы найти RoomID, нам бы в идеале нужно было достать задачу из БД,
 			// но для простоты мы можем слать тип 'task_updated',
 			// а фронтенд сам поймет, что нужно обновить.
+			statusMetadata, _ := json.Marshal(map[string]string{
+				"task_id": req.ID,
+				"status":  req.Status,
+			})
 			chatHub.Broadcast(chat2.Message{
 				Type:     "task_updated",
-				Metadata: []byte(`{"task_id":"` + req.ID + `", "status":"` + req.Status + `"}`),
+				Metadata: statusMetadata,
 			})
 
 			return &UpdateTaskResponse{Data: entity2.Task{ID: req.ID, Status: req.Status}}, nil

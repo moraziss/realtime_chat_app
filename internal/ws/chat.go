@@ -63,6 +63,7 @@ func (c *Chat) Close() {
 
 func (c *Chat) Broadcast(msg Message) error {
 	users := c.rooms.GetUsers(msg.Receiver)
+	var firstErr error
 	for _, user := range users {
 		sessions := c.lookup.Get(UserID(user))
 		for _, sid := range sessions {
@@ -72,11 +73,14 @@ func (c *Chat) Broadcast(msg Message) error {
 			}
 			if err := sess.Conn().WriteJSON(msg); err != nil {
 				c.Clear(sess)
-				return err
+				if firstErr == nil {
+					firstErr = err
+				}
+				continue
 			}
 		}
 	}
-	return nil
+	return firstErr
 }
 
 func (c *Chat) eventloop() {
@@ -187,6 +191,7 @@ func (c *Chat) Bind(uid UserID, sid SessionID) func() {
 	return func() {
 		session := c.sessions.Get(sid.String())
 		c.Clear(session)
+		c.lookup.DeleteSession(sid)
 		if len(c.Get(uid)) == 0 {
 			c.Leave(uid)
 		}
