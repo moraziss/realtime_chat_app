@@ -23,9 +23,13 @@ func (c *Conn) CreateRoom(users ...string) (string, error) {
 	}
 
 	for _, userID := range users {
-		tx.Exec(`
-			INSERT INTO user_rooms (user_id, room_id) 
-			VALUES ($1, $2)`, userID, roomID)
+		if _, err := tx.Exec(`
+			INSERT INTO user_rooms (user_id, room_id)
+			VALUES ($1, $2)
+			ON CONFLICT (user_id, room_id) DO NOTHING`, userID, roomID); err != nil {
+			tx.Rollback()
+			return "", err
+		}
 	}
 
 	return roomID, tx.Commit()

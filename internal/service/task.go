@@ -201,9 +201,10 @@ func NewUpdateTaskService(repo repository.Task, chatHub *chat2.Chat) UpdateTask 
 		}
 
 		// Рассылаем уведомление о полном обновлении задачи
+		updateMetadata, _ := json.Marshal(map[string]string{"task_id": req.ID})
 		chatHub.Broadcast(chat2.Message{
 			Type:     "task_updated",
-			Metadata: []byte(`{"task_id":"` + req.ID + `"}`),
+			Metadata: updateMetadata,
 		})
 
 		return &UpdateTaskResponse{Data: *task}, nil
