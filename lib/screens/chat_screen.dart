@@ -82,8 +82,10 @@ class _ChatScreenState extends State<ChatScreen> {
       final conversations = jsonDecode(res.body)['data'] as List? ?? [];
 
       _chatController.messages.clear();
+      _seenMessageIds.clear();
       for (final conv in conversations) {
         final authorId = conv['user_id'].toString();
+        _seenMessageIds.add(conv['id'].toString());
         final isMe = authorId == _currentUserId;
         final createdAt = DateTime.parse(conv['created_at']).toUtc();
 
