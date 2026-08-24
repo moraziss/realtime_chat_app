@@ -57,11 +57,23 @@ CREATE TABLE IF NOT EXISTS tasks (
     priority VARCHAR(20) DEFAULT 'medium',
     due_date TIMESTAMP,
     subtasks JSONB DEFAULT '[]'::jsonb,
+    accepted_by JSONB DEFAULT '[]'::jsonb,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_tasks_room ON tasks (room_id);
+
+-- init.sql применяется Postgres-образом только при первом старте (пустой
+-- volume), поэтому для уже существующих БД добавляем колонку отдельно и
+-- идемпотентно — этот ALTER безопасно перезапускать.
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS accepted_by JSONB DEFAULT '[]'::jsonb;
+
+-- Ускоряет поиск сообщения-носителя задачи по (metadata->>'task_id'),
+-- который используется при удалении задачи и обновлении её "живых" данных
+-- в истории переписки.
+CREATE INDEX IF NOT EXISTS idx_conversations_metadata_task_id
+    ON conversations ((metadata->>'task_id'));
 
 -- Таблица для временных кодов регистрации
 CREATE TABLE IF NOT EXISTS verification_codes (
