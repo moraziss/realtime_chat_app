@@ -13,8 +13,6 @@ import 'theme_notifier.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Возвращаем logout, чтобы каждый раз видеть экран входа при перезапуске
-  await AuthService().logout();
 
   runApp(
     ChangeNotifierProvider(
