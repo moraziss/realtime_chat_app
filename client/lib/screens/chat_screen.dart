@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_chat_core/flutter_chat_core.dart';
@@ -31,6 +32,7 @@ class _ChatScreenState extends State<ChatScreen> {
   String? _displayTitle;
 
   final Set<String> _seenMessageIds = {};
+  StreamSubscription<Map<String, dynamic>>? _wsSubscription;
 
   @override
   void initState() {
@@ -41,6 +43,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
+    _wsSubscription?.cancel();
     _chatController.dispose();
     super.dispose();
   }
@@ -152,7 +155,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
     _sendReadReceipt();
 
-    WebSocketService().stream.listen((msg) {
+    _wsSubscription?.cancel();
+    _wsSubscription = WebSocketService().stream.listen((msg) {
       if (!mounted) return;
 
       if (msg['type'] == 'read' &&
