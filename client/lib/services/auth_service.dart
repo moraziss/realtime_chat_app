@@ -9,10 +9,22 @@ class AuthService {
   static const _userIdKey = 'user_id';
   static const _userEmailKey = 'user_email';
 
+  // Кэш текущей личности в памяти процесса. На desktop (Windows/Linux/macOS)
+  // shared_preferences хранится в одном файле на диске, привязанном к
+  // приложению, а не к процессу — если запустить два окна одного и того же
+  // .exe и залогиниться в них под разными аккаунтами, второй логин
+  // перезапишет файл, и первое окно при следующем чтении с диска (getToken/
+  // getUserId читали с диска на каждый вызов) внезапно получит чужую
+  // личность прямо посреди уже открытой сессии. Кэш фиксирует личность этого
+  // конкретного запущенного процесса один раз и больше не позволяет её тихо
+  // подменить извне.
+  static String? _cachedToken;
+  static String? _cachedUserId;
+  static String? _cachedUserEmail;
+
   // Вспомогательная функция для генерации уникального ключа для каждого пользователя
   Future<String> _getPrefKey(String baseKey) async {
-    final prefs = await SharedPreferences.getInstance();
-    final uid = prefs.getString(_userIdKey) ?? 'guest';
+    final uid = await getUserId() ?? 'guest';
     return 'user_${uid}_$baseKey';
   }
 
@@ -123,10 +135,12 @@ class AuthService {
     if (res.statusCode == 200) {
       final data = jsonDecode(res.body);
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_tokenKey, data['access_token']);
-      await prefs.setString(_userEmailKey, email);
-
       final token = data['access_token'] as String;
+      await prefs.setString(_tokenKey, token);
+      await prefs.setString(_userEmailKey, email);
+      _cachedToken = token;
+      _cachedUserEmail = email;
+
       final parts = token.split('.');
       if (parts.length == 3) {
         final payload = parts[1];
@@ -135,6 +149,7 @@ class AuthService {
         final userId = decoded['sub']?.toString();
         if (userId != null) {
           await prefs.setString(_userIdKey, userId);
+          _cachedUserId = userId;
         }
       }
       return true;
@@ -163,8 +178,10 @@ class AuthService {
   }
 
   Future<String?> getToken() async {
+    if (_cachedToken != null) return _cachedToken;
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_tokenKey);
+    _cachedToken = prefs.getString(_tokenKey);
+    return _cachedToken;
   }
 
   Future<bool> isLoggedIn() async {
@@ -176,7 +193,7 @@ class AuthService {
     final prefs = await SharedPreferences.getInstance();
 
     // Очищаем пользовательский кэш перед удалением user_id
-    final uid = prefs.getString(_userIdKey) ?? 'guest';
+    final uid = _cachedUserId ?? prefs.getString(_userIdKey) ?? 'guest';
     await prefs.remove('user_${uid}_name');
     await prefs.remove('user_${uid}_bio');
     await prefs.remove('user_${uid}_avatar');
@@ -185,6 +202,10 @@ class AuthService {
     await prefs.remove(_tokenKey);
     await prefs.remove(_userIdKey);
     await prefs.remove(_userEmailKey);
+
+    _cachedToken = null;
+    _cachedUserId = null;
+    _cachedUserEmail = null;
   }
 
   // Метод для удаления аккаунта
@@ -199,13 +220,17 @@ class AuthService {
   }
 
   Future<String?> getUserId() async {
+    if (_cachedUserId != null) return _cachedUserId;
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_userIdKey);
+    _cachedUserId = prefs.getString(_userIdKey);
+    return _cachedUserId;
   }
 
   Future<String?> getUserEmail() async {
+    if (_cachedUserEmail != null) return _cachedUserEmail;
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_userEmailKey);
+    _cachedUserEmail = prefs.getString(_userEmailKey);
+    return _cachedUserEmail;
   }
 
   Future<http.Response> get(String path) async {
