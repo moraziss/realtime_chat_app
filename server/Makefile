@@ -2,7 +2,7 @@
 export
 
 start:
-	go run ./cmd
+	go run ./cmd/app
 
 up:
 	docker-compose up -d

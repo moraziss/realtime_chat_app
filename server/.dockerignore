@@ -1,5 +1,49 @@
+# Git & Version Control
 .git
-.idea
-uploads
-server
-*.env
+.gitignore
+.gitattributes
+
+# Environment & Secrets
+.env
+.env.*
+
+# Local Executables & Build Artifacts
+/server
+/main
+*.exe
+*.dll
+*.so
+*.dylib
+bin/
+dist/
+
+# User Uploads & Media
+uploads/*
+!uploads/.gitkeep
+
+# IDEs & Editor Files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Documentation
+README.md
+*.md
+docs/
+
+# Go Tests & Profiling
+*_test.go
+*.test
+*.out
+*.prof
+coverage.txt
+
+# Client / Flutter (если сборка идет из общего корня)
+client/
+*.dart
+
+# Docker configuration itself
+Dockerfile*
+docker-compose*
+.dockerignore
