@@ -128,7 +128,7 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
       'title': taskData['title'],
       'priority': taskData['priority'] ?? 'medium',
       'description': taskData['description'] ?? '',
-      'deadline': taskData['deadline'],
+      'due_date': taskData['due_date'],
       'subtasks': taskData['subtasks'] ?? [],
       'accepted_by': taskData['accepted_by'] ?? [],
     };
