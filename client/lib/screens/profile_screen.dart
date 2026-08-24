@@ -102,7 +102,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       setState(() => _isUploading = true);
 
-      final String? uploadedUrl = await _authService.uploadFile(image.path, image.name);
+      final bytes = await image.readAsBytes();
+      final String? uploadedUrl = await _authService.uploadFile(bytes, image.name);
 
       if (uploadedUrl != null) {
         // Обновляем профиль на сервере
