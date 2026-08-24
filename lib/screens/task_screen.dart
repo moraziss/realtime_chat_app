@@ -144,7 +144,18 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
       currentUserId: _currentUserId ?? '',
       message: message,
       onAccept: (id) async {
-        await _authService.patch('/tasks/$id', {'status': 'in_progress'});
+        // Та же логика "принятия обеими сторонами", что и в чате: статус
+        // становится in_progress только когда accepted_by содержит обоих
+        // участников, иначе задача остаётся в ожидании напарника.
+        final rawAccepted = metadata['accepted_by'];
+        List<String> acceptedBy = rawAccepted is List
+            ? rawAccepted.map<String>((e) => e.toString()).toList()
+            : <String>[];
+        if (_currentUserId != null && !acceptedBy.contains(_currentUserId)) {
+          acceptedBy.add(_currentUserId!);
+        }
+        final newStatus = acceptedBy.length >= 2 ? 'in_progress' : 'todo';
+        await _authService.patch('/tasks/$id', {'status': newStatus, 'accepted_by': acceptedBy});
         _fetchAllTasks();
       },
       onStatusChange: (id, s) async {
