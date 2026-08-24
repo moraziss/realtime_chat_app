@@ -159,13 +159,16 @@ class AuthService {
 
   String get currentBaseUrl => AppConfig.apiUrl;
 
-  Future<String?> uploadFile(String filePath, String fileName) async {
+  // Принимает байты, а не путь к файлу: MultipartFile.fromPath использует
+  // dart:io и не работает на web, а на web путь от image_picker/file_picker
+  // и не является настоящим путём в файловой системе (blob URL).
+  Future<String?> uploadFile(Uint8List bytes, String fileName) async {
     try {
       final token = await getToken();
       if (token == null) return null;
       var request = http.MultipartRequest('POST', Uri.parse('${AppConfig.apiUrl}/upload'));
       request.headers['Authorization'] = 'Bearer $token';
-      request.files.add(await http.MultipartFile.fromPath('file', filePath, filename: fileName));
+      request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: fileName));
       final streamedResponse = await request.send();
       final response = await http.Response.fromStream(streamedResponse);
       if (response.statusCode == 200 || response.statusCode == 201) {

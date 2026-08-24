@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_chat_core/flutter_chat_core.dart';
 import 'package:flutter_chat_ui/flutter_chat_ui.dart';
@@ -301,7 +302,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _handleFileSelection({required bool isImage}) async {
-    String? filePath;
+    Uint8List? fileBytes;
     String? fileName;
     int? fileSize;
 
@@ -309,17 +310,19 @@ class _ChatScreenState extends State<ChatScreen> {
       final ImagePicker picker = ImagePicker();
       final XFile? image = await picker.pickImage(source: ImageSource.gallery, maxWidth: 1200, maxHeight: 1200, imageQuality: 85);
       if (image != null) {
-        filePath = image.path; fileName = image.name; fileSize = await image.length();
+        fileBytes = await image.readAsBytes(); fileName = image.name; fileSize = fileBytes.length;
       }
     } else {
-      final result = await FilePicker.platform.pickFiles(type: FileType.any);
-      if (result != null && result.files.single.path != null) {
-        filePath = result.files.single.path; fileName = result.files.single.name; fileSize = result.files.single.size;
+      // withData: true — иначе на web байты вообще не приходят (там нет
+      // настоящего файлового пути, который можно было бы прочитать потом).
+      final result = await FilePicker.platform.pickFiles(type: FileType.any, withData: true);
+      if (result != null && result.files.single.bytes != null) {
+        fileBytes = result.files.single.bytes; fileName = result.files.single.name; fileSize = result.files.single.size;
       }
     }
 
-    if (filePath != null && fileName != null) {
-      final url = await _authService.uploadFile(filePath, fileName);
+    if (fileBytes != null && fileName != null) {
+      final url = await _authService.uploadFile(fileBytes, fileName);
       if (url != null) {
         final metadata = {'is_image': isImage, 'is_file': !isImage, 'url': url, 'name': fileName, 'size': fileSize};
         final localMsgId = _uuid.v4();
