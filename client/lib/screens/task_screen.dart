@@ -190,7 +190,13 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
       },
       onSubtasksUpdated: (taskId, updatedSubtasks) async {
         try {
-          await _authService.patch('/tasks/$taskId', {'subtasks': updatedSubtasks});
+          // Отправляем полный набор полей задачи (как в чате), а не только
+          // subtasks: PATCH /tasks/:id трактует такой запрос как полное
+          // обновление и иначе перезаписал бы остальные поля (например
+          // due_date) пустыми значениями.
+          final payload = Map<String, dynamic>.from(metadata);
+          payload['subtasks'] = updatedSubtasks;
+          await _authService.patch('/tasks/$taskId', payload);
           _fetchAllTasks();
         } catch (e) {
           debugPrint('Error updating subtasks in task_screen: $e');
