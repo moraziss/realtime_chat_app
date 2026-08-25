@@ -24,10 +24,10 @@ func (c *Conn) GetUserTaskStats(userID string) (*entity.TaskStats, error) {
 // status теперь читаются и пишутся только в таблице tasks — она единственный
 // источник истины для состояния задачи (metadata в conversations больше не
 // дублирует и не хранит эти поля, см. GetConversations/refreshTaskMetadata).
-func (d *Conn) AcceptTask(taskID, userID string) (*entity.TaskMetadata, error) {
+func (c *Conn) AcceptTask(taskID, userID string) (*entity.TaskMetadata, error) {
 	var acceptedByJSON []byte
 	var status string
-	err := d.db.QueryRow(`SELECT accepted_by, status FROM tasks WHERE id = $1`, taskID).Scan(&acceptedByJSON, &status)
+	err := c.db.QueryRow(`SELECT accepted_by, status FROM tasks WHERE id = $1`, taskID).Scan(&acceptedByJSON, &status)
 	if err != nil {
 		return nil, err
 	}
@@ -57,7 +57,7 @@ func (d *Conn) AcceptTask(taskID, userID string) (*entity.TaskMetadata, error) {
 		return nil, err
 	}
 
-	_, err = d.db.Exec(`UPDATE tasks SET status = $1, accepted_by = $2, updated_at = NOW() WHERE id = $3`,
+	_, err = c.db.Exec(`UPDATE tasks SET status = $1, accepted_by = $2, updated_at = NOW() WHERE id = $3`,
 		status, string(newAcceptedByJSON), taskID)
 	if err != nil {
 		return nil, err
@@ -71,13 +71,13 @@ func (d *Conn) AcceptTask(taskID, userID string) (*entity.TaskMetadata, error) {
 // пишется как есть — включая пустую строку, если пользователь намеренно
 // очистил поле. Остальные текстовые поля защищены COALESCE(NULLIF(...))
 // на случай частичных запросов, которые их не передают.
-func (d *Conn) UpdateTask(task *entity.Task) error {
+func (c *Conn) UpdateTask(task *entity.Task) error {
 	subtasksJSON, _ := json.Marshal(task.Subtasks)
 	if string(subtasksJSON) == "null" || task.Subtasks == nil {
 		subtasksJSON = []byte("[]")
 	}
 
-	_, err := d.db.Exec(`UPDATE tasks SET
+	_, err := c.db.Exec(`UPDATE tasks SET
 		title=COALESCE(NULLIF($1,''),title),
 		description=$2,
 		status=COALESCE(NULLIF($3,''),status),
@@ -125,17 +125,17 @@ func (c *Conn) CreateTask(task *entity.Task) error {
 	).Scan(&task.ID, &task.CreatedAt, &task.UpdatedAt)
 }
 
-func (d *Conn) UpdateTaskStatus(taskID string, newStatus string, acceptedBy []string) error {
+func (c *Conn) UpdateTaskStatus(taskID string, newStatus string, acceptedBy []string) error {
 	if len(acceptedBy) > 0 {
 		acceptedByJSON, err := json.Marshal(acceptedBy)
 		if err != nil {
 			return err
 		}
-		_, err = d.db.Exec(`UPDATE tasks SET status = $1, accepted_by = $2, updated_at = NOW() WHERE id = $3`,
+		_, err = c.db.Exec(`UPDATE tasks SET status = $1, accepted_by = $2, updated_at = NOW() WHERE id = $3`,
 			newStatus, string(acceptedByJSON), taskID)
 		return err
 	}
-	_, err := d.db.Exec(`UPDATE tasks SET status = $1, updated_at = NOW() WHERE id = $2`, newStatus, taskID)
+	_, err := c.db.Exec(`UPDATE tasks SET status = $1, updated_at = NOW() WHERE id = $2`, newStatus, taskID)
 	return err
 }
 
@@ -190,8 +190,8 @@ func (c *Conn) DeleteTask(id string) error {
 	return err
 }
 
-func (d *Conn) MarkMessagesAsRead(roomID, userID string) error {
-	_, err := d.db.Exec(`
+func (c *Conn) MarkMessagesAsRead(roomID, userID string) error {
+	_, err := c.db.Exec(`
 		UPDATE conversations 
 		SET metadata = COALESCE(metadata, '{}'::jsonb) || '{"is_read": true}'::jsonb 
 		WHERE room_id = $1 AND user_id != $2 AND (metadata->>'is_read' IS NULL OR metadata->>'is_read' = 'false')`,
