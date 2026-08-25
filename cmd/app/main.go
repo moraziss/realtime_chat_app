@@ -1,6 +1,7 @@
 package main
 
 import (
+	"Real-time-Chat/internal/config"
 	"Real-time-Chat/internal/controller"
 	"Real-time-Chat/internal/database"
 	"Real-time-Chat/internal/entity"
@@ -37,65 +38,44 @@ var dangerousUploadExt = map[string]bool{
 	".mjs":  true,
 }
 
-// allowedHTTPOrigins задаётся через ALLOWED_ORIGINS (тот же список через
-// запятую, что и для WebSocket — см. internal/ws/chat.go). Если не задано,
-// CORS разрешает любой Origin: без этого браузер блокирует запросы с
-// Flutter web (localhost:<порт flutter run -d chrome>) к API на другом порту
-// (localhost:8080), поскольку это разные origin.
-var allowedHTTPOrigins = parseAllowedOrigins(os.Getenv("ALLOWED_ORIGINS"))
-
-func parseAllowedOrigins(v string) map[string]struct{} {
-	v = strings.TrimSpace(v)
-	if v == "" {
-		return nil
-	}
-	set := make(map[string]struct{})
-	for _, origin := range strings.Split(v, ",") {
-		if origin = strings.TrimSpace(origin); origin != "" {
-			set[origin] = struct{}{}
-		}
-	}
-	return set
-}
-
 // withCORS оборачивает весь роутер, а не отдельные маршруты: preflight-запрос
 // (OPTIONS) браузер шлёт на тот же путь ещё до того, как httprouter вообще
 // определит, зарегистрирован ли на него обработчик, поэтому перехватываем
-// его здесь и не пускаем дальше.
-func withCORS(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		origin := r.Header.Get("Origin")
-		if origin != "" {
-			if len(allowedHTTPOrigins) == 0 {
-				w.Header().Set("Access-Control-Allow-Origin", origin)
-			} else if _, ok := allowedHTTPOrigins[origin]; ok {
-				w.Header().Set("Access-Control-Allow-Origin", origin)
+// его здесь и не пускаем дальше. allowedOrigins — из config.Config
+// (ALLOWED_ORIGINS); пустой набор означает "разрешён любой Origin" — без
+// этого браузер блокирует запросы с Flutter web к API на другом порту.
+func withCORS(allowedOrigins map[string]struct{}) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			origin := r.Header.Get("Origin")
+			if origin != "" {
+				if len(allowedOrigins) == 0 {
+					w.Header().Set("Access-Control-Allow-Origin", origin)
+				} else if _, ok := allowedOrigins[origin]; ok {
+					w.Header().Set("Access-Control-Allow-Origin", origin)
+				}
+				w.Header().Set("Vary", "Origin")
 			}
-			w.Header().Set("Vary", "Origin")
-		}
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
+			if r.Method == http.MethodOptions {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
 
-		next.ServeHTTP(w, r)
-	})
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 func main() {
-	var (
-		dbUser    = os.Getenv("DB_USER")
-		dbPass    = os.Getenv("DB_PASS")
-		dbName    = os.Getenv("DB_NAME")
-		jwtSecret = os.Getenv("JWT_SECRET")
-		jwtIssuer = os.Getenv("JWT_ISSUER")
-		port      = ":8080"
-	)
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	db, err := database.New(dbUser, dbPass, dbName)
+	db, err := database.New(cfg.DBUser, cfg.DBPass, cfg.DBName, cfg.DBHost)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -105,10 +85,12 @@ func main() {
 		Now: func() time.Time {
 			return time.Now().UTC()
 		},
-		Issuer: jwtIssuer,
-		TTL:    24 * time.Hour,
-		Secret: []byte(jwtSecret),
+		Issuer: cfg.JWTIssuer,
+		TTL:    cfg.AccessTTL,
+		Secret: []byte(cfg.JWTSecret),
 	})
+
+	ws.SetAllowedOrigins(cfg.AllowedOrigins)
 
 	c := ws.New(db)
 	defer c.Close()
@@ -122,7 +104,7 @@ func main() {
 	postRegisterService := service.NewRegisterService(db, signer)
 
 	// Почта и сервис отправки кода
-	emailSender := service.NewEmailSender()
+	emailSender := service.NewEmailSender(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUser, cfg.SMTPPassword)
 	sendCodeService := service.NewSendCodeService(db, emailSender)
 
 	// Комнаты и сообщения
@@ -245,9 +227,10 @@ func main() {
 		json.NewEncoder(w).Encode(res)
 	}))
 
+	addr := ":" + cfg.Port
 	srv := &http.Server{
-		Addr:         port,
-		Handler:      withCORS(router),
+		Addr:         addr,
+		Handler:      withCORS(cfg.AllowedOrigins)(router),
 		WriteTimeout: 15 * time.Second,
 		ReadTimeout:  15 * time.Second,
 	}
@@ -256,7 +239,7 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 
 	go func() {
-		log.Printf("сервер запущен на порту %s\n", port)
+		log.Printf("сервер запущен на порту %s\n", cfg.Port)
 		if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 			log.Fatal(err)
 		}

@@ -3,7 +3,6 @@ package service
 import (
 	"fmt"
 	"net/smtp"
-	"os"
 )
 
 // Sender - интерфейс для отправки писем
@@ -18,17 +17,11 @@ type gmailSender struct {
 	password string
 }
 
-func NewEmailSender() EmailSender {
-	// Проверяем оба варианта названия переменной для надежности
-	password := os.Getenv("SMTP_PASS")
-	if password == "" {
-		password = os.Getenv("SMTP_PASSWORD")
-	}
-
+func NewEmailSender(host, port, user, password string) EmailSender {
 	return &gmailSender{
-		host:     os.Getenv("SMTP_HOST"),
-		port:     os.Getenv("SMTP_PORT"),
-		user:     os.Getenv("SMTP_USER"),
+		host:     host,
+		port:     port,
+		user:     user,
 		password: password,
 	}
 }

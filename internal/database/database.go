@@ -3,7 +3,6 @@ package database
 import (
 	"database/sql"
 	"fmt"
-	"os"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -13,11 +12,7 @@ type Conn struct {
 	db *sql.DB
 }
 
-func New(user, pass, name string) (*Conn, error) {
-	host := os.Getenv("DB_HOST")
-	if host == "" {
-		host = "localhost"
-	}
+func New(user, pass, name, host string) (*Conn, error) {
 	connStr := fmt.Sprintf(
 		"user=%s password=%s dbname=%s host=%s sslmode=disable",
 		user, pass, name, host,

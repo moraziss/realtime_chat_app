@@ -8,8 +8,6 @@ import (
 	"errors"
 	"log"
 	"net/http"
-	"os"
-	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -27,22 +25,16 @@ var (
 	defaultBroadcastQueueSize = 10000
 )
 
-// allowedWSOrigins задаётся через ALLOWED_ORIGINS (список через запятую).
-// Если переменная не задана, поведение остаётся прежним — origin не проверяется.
-var allowedWSOrigins = parseAllowedOrigins(os.Getenv("ALLOWED_ORIGINS"))
+// allowedWSOrigins задаётся один раз при старте через SetAllowedOrigins (см.
+// cmd/app/main.go, значение приходит из config.Config.AllowedOrigins). Если
+// не задано (nil), origin не проверяется — как и раньше.
+var allowedWSOrigins map[string]struct{}
 
-func parseAllowedOrigins(v string) map[string]struct{} {
-	v = strings.TrimSpace(v)
-	if v == "" {
-		return nil
-	}
-	set := make(map[string]struct{})
-	for _, origin := range strings.Split(v, ",") {
-		if origin = strings.TrimSpace(origin); origin != "" {
-			set[origin] = struct{}{}
-		}
-	}
-	return set
+// SetAllowedOrigins задаёт множество разрешённых Origin для апгрейда
+// WebSocket-соединения. Должна вызываться один раз при старте, до того как
+// начнут приходить запросы на /ws.
+func SetAllowedOrigins(origins map[string]struct{}) {
+	allowedWSOrigins = origins
 }
 
 var upgrader = websocket.Upgrader{
