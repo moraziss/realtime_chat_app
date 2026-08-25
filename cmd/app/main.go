@@ -11,36 +11,18 @@ import (
 	"Real-time-Chat/internal/service"
 	"Real-time-Chat/internal/ws"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"runtime/debug"
 	"strings"
 	"syscall"
 	"time"
 
-	"github.com/google/uuid"
-
 	"github.com/julienschmidt/httprouter"
 )
-
-// dangerousUploadExt перечисляет расширения, которые браузер может
-// выполнить как код, если открыть загруженный файл напрямую с /uploads/
-// (тот же origin, что и остальное приложение). Остальные типы (фото,
-// видео, документы) по-прежнему принимаются без изменений.
-var dangerousUploadExt = map[string]bool{
-	".html":  true,
-	".htm":   true,
-	".xhtml": true,
-	".svg":   true,
-	".js":    true,
-	".mjs":   true,
-}
 
 // withCORS оборачивает весь роутер, а не отдельные маршруты: preflight-запрос
 // (OPTIONS) браузер шлёт на тот же путь ещё до того, как httprouter вообще
@@ -194,49 +176,7 @@ func main() {
 	router.ServeFiles("/uploads/*filepath", http.Dir("./uploads"))
 
 	// Загрузка файла
-	router.POST("/upload", authorized(func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-		r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
-		if err := r.ParseMultipartForm(10 << 20); err != nil {
-			apperr.WriteError(w, r, apperr.Validation("file too large or malformed form"))
-			return
-		}
-
-		file, handler, err := r.FormFile("file")
-		if err != nil {
-			apperr.WriteError(w, r, apperr.Validation("no file received"))
-			return
-		}
-		defer file.Close()
-
-		ext := strings.ToLower(filepath.Ext(handler.Filename))
-		if dangerousUploadExt[ext] {
-			apperr.WriteError(w, r, apperr.Validation("file type not allowed"))
-			return
-		}
-
-		os.MkdirAll("uploads", os.ModePerm)
-
-		filename := uuid.New().String() + ext
-		savePath := filepath.Join("uploads", filename)
-
-		dst, err := os.Create(savePath)
-		if err != nil {
-			apperr.WriteError(w, r, apperr.Internal(err))
-			return
-		}
-		defer dst.Close()
-
-		if _, err := io.Copy(dst, file); err != nil {
-			apperr.WriteError(w, r, apperr.Internal(err))
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]string{
-			"url": "/uploads/" + filename,
-		})
-	}))
+	router.POST("/upload", authorized(ctl.PostUpload))
 
 	// Задачи
 	router.GET("/rooms/:id/tasks", authorized(ctl.GetTasks(getTasksService)))
@@ -246,20 +186,12 @@ func main() {
 	router.GET("/users/me/stats", authorized(ctl.GetUserStats(getUserStatsService)))
 
 	// Расширенная статистика
-	router.GET("/users/me/extended-stats", authorized(func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-		res, err := getExtendedStatsService(r.Context())
-		if err != nil {
-			apperr.WriteError(w, r, err)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(res)
-	}))
+	router.GET("/users/me/extended-stats", authorized(ctl.GetExtendedStats(getExtendedStatsService)))
 
 	addr := ":" + cfg.Port
 	srv := &http.Server{
-		Addr:         addr,
-		Handler:      withCORS(cfg.AllowedOrigins)(logging.WithRequestID(withRecover(router))),
+		Addr:              addr,
+		Handler:           withCORS(cfg.AllowedOrigins)(logging.WithRequestID(withRecover(router))),
 		WriteTimeout:      15 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		ReadHeaderTimeout: 5 * time.Second,

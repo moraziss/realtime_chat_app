@@ -85,3 +85,17 @@ func (c *Controller) DeleteMe(svc service.DeleteMe) httprouter.Handle {
 		w.Write([]byte(`{"status":"success"}`))
 	}
 }
+
+// GetExtendedStats возвращает расширенную статистику текущего пользователя
+// (сообщения, дни в приложении, история выполнения задач).
+func (c *Controller) GetExtendedStats(svc service.GetExtendedStats) httprouter.Handle {
+	return func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+		res, err := svc(r.Context())
+		if err != nil {
+			apperr.WriteError(w, r, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(res)
+	}
+}
