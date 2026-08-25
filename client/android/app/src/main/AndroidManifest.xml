@@ -2,7 +2,7 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <application
-        android:label="realtime_chat_app"
+        android:label="Realtime Chat"
         android:name="${applicationName}"
         android:usesCleartextTraffic="true"
         android:icon="@mipmap/ic_launcher">
