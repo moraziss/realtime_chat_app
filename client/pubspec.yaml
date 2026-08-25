@@ -31,6 +31,7 @@ dependencies:
 
   # Хранение токена между сессиями
   shared_preferences: ^2.2.2
+  flutter_secure_storage: ^9.2.2
 
   # Навигация
   go_router: ^17.2.0

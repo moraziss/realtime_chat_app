@@ -28,7 +28,15 @@ final _authService = AuthService();
 final _router = GoRouter(
   initialLocation: '/login',
   redirect: (context, state) async {
-    final loggedIn = await _authService.isLoggedIn();
+    bool loggedIn = false;
+    try {
+      loggedIn = await _authService.isLoggedIn();
+    } catch (e) {
+      // Не даём сбою здесь (например, недоступности secure storage) намертво
+      // подвесить роутер без единого экрана — по умолчанию считаем, что не
+      // авторизованы, и просто отправляем на логин.
+      debugPrint('isLoggedIn() error: $e');
+    }
     final isLoginRoute = state.uri.path == '/login';
     final isRegisterRoute = state.uri.path == '/register';
 
