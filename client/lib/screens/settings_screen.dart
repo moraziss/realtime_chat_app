@@ -20,80 +20,114 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
 
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Настройки'),
-        centerTitle: true,
       ),
       body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
           _sectionTitle('Внешний вид'),
-          _buildColorPicker(),
-          
-          const Divider(indent: 16, endIndent: 16),
-          
-          _buildFontSizePicker(),
-
-          SwitchListTile(
-            secondary: const Icon(Icons.dark_mode_outlined),
-            title: const Text('Темная тема'),
-            subtitle: const Text('Переключить оформление приложения'),
-            value: themeProvider.isDarkMode,
-            onChanged: (_) => themeProvider.toggleTheme(),
+          _sectionCard(
+            colorScheme,
+            children: [
+              _buildColorPicker(),
+              Divider(indent: 16, endIndent: 16, color: colorScheme.outlineVariant.withOpacity(0.4)),
+              _buildFontSizePicker(),
+              SwitchListTile(
+                secondary: const Icon(Icons.dark_mode_rounded),
+                title: const Text('Темная тема'),
+                subtitle: const Text('Переключить оформление приложения'),
+                value: themeProvider.isDarkMode,
+                onChanged: (_) => themeProvider.toggleTheme(),
+              ),
+            ],
           ),
 
           _sectionTitle('Аккаунт и безопасность'),
-          ListTile(
-            leading: const Icon(Icons.person_outline),
-            title: const Text('Профиль'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => context.push('/profile'),
+          _sectionCard(
+            colorScheme,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.person_rounded),
+                title: const Text('Профиль'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () => context.push('/profile'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.cleaning_services_rounded),
+                title: const Text('Очистить настройки'),
+                subtitle: const Text('Сбросить цвет и размер текста'),
+                onTap: () => _resetSettings(themeProvider),
+              ),
+              ListTile(
+                leading: const Icon(Icons.info_rounded),
+                title: const Text('О приложении'),
+                onTap: () {
+                  showAboutDialog(
+                    context: context,
+                    applicationName: 'Realtime Chat',
+                    applicationVersion: '1.3.0',
+                    applicationIcon: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(colors: [colorScheme.primary, colorScheme.primaryContainer]),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Icons.forum_rounded, color: Colors.white),
+                    ),
+                    children: [
+                      const Text('Быстрый и удобный мессенджер для командной работы.'),
+                    ],
+                  );
+                },
+              ),
+            ],
           ),
-          ListTile(
-            leading: const Icon(Icons.cleaning_services_outlined),
-            title: const Text('Очистить настройки'),
-            subtitle: const Text('Сбросить цвет и размер текста'),
-            onTap: () => _resetSettings(themeProvider),
+
+          _sectionTitle('Опасная зона'),
+          _sectionCard(
+            colorScheme,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.logout_rounded, color: Colors.orange),
+                title: const Text('Выйти из системы'),
+                onTap: () async {
+                  await _authService.logout();
+                  if (mounted) context.go('/login');
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete_forever_rounded, color: Colors.redAccent),
+                title: const Text('Удалить аккаунт', style: TextStyle(color: Colors.redAccent)),
+                subtitle: const Text('Все данные будут стерты безвозвратно'),
+                onTap: _confirmAccountDeletion,
+              ),
+            ],
           ),
-          ListTile(
-            leading: const Icon(Icons.info_outline),
-            title: const Text('О приложении'),
-            onTap: () {
-              showAboutDialog(
-                context: context,
-                applicationName: 'Realtime Chat',
-                applicationVersion: '1.3.0',
-                applicationIcon: const FlutterLogo(size: 40),
-                children: [
-                  const Text('Быстрый и удобный мессенджер для командной работы.'),
-                ],
-              );
-            },
-          ),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.logout, color: Colors.orange),
-            title: const Text('Выйти из системы'),
-            onTap: () async {
-              await _authService.logout();
-              if (mounted) context.go('/login');
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.delete_forever, color: Colors.redAccent),
-            title: const Text('Удалить аккаунт', style: TextStyle(color: Colors.redAccent)),
-            subtitle: const Text('Все данные будут стерты безвозвратно'),
-            onTap: _confirmAccountDeletion,
-          ),
-          const SizedBox(height: 32),
         ],
       ),
     );
   }
 
+  Widget _sectionCard(ColorScheme colorScheme, {required List<Widget> children}) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHigh.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(children: children),
+    );
+  }
+
   Widget _sectionTitle(String title) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+      padding: const EdgeInsets.fromLTRB(8, 20, 8, 10),
       child: Text(
         title.toUpperCase(),
         style: TextStyle(
