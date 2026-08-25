@@ -159,6 +159,16 @@ loop:
 				msg.ID = msgID
 
 			case MessageTypeTask:
+				// msg.Receiver — комната, которую прислал сам клиент; она
+				// говорит только о том, что отправитель состоит в КАКОЙ-ТО
+				// комнате, но не о том, что task_id принадлежит именно ей.
+				// Без этой проверки участник любой своей комнаты мог бы
+				// поменять статус чужой задачи, просто зная её id.
+				if !c.canAccessTask(msg.Sender, msg.TaskID) {
+					slog.Warn("ws: access denied for task", "sender", msg.Sender, "task_id", msg.TaskID)
+					continue
+				}
+
 				// Используем TaskStatus, если Flutter шлет статус именно в этом поле
 				status := msg.TaskStatus
 				if status == "" {
@@ -182,6 +192,11 @@ loop:
 
 			// --- НОВЫЙ БЛОК: Обработка "рукопожатия" для старта задачи ---
 			case MessageTypeTaskAccept:
+				if !c.canAccessTask(msg.Sender, msg.TaskID) {
+					slog.Warn("ws: access denied for task", "sender", msg.Sender, "task_id", msg.TaskID)
+					continue
+				}
+
 				slog.Debug("ws: task accept requested", "task_id", msg.TaskID, "user", msg.Sender)
 
 				// Обращаемся к новому методу БД, который мы написали
@@ -207,6 +222,19 @@ loop:
 			c.Broadcast(msg)
 		}
 	}
+}
+
+// canAccessTask проверяет доступ к задаче по её РЕАЛЬНОЙ комнате (через
+// GetTaskRoom), а не по той, что заявил клиент в сообщении — иначе
+// canAccessRoom(sender, msg.Receiver) подтвердил бы доступ к любой задаче,
+// пока sender состоит хоть в какой-то комнате.
+func (c *Chat) canAccessTask(userID, taskID string) bool {
+	roomID, err := c.db.GetTaskRoom(taskID)
+	if err != nil {
+		slog.Error("ws: failed to resolve task room", "task_id", taskID, "err", err)
+		return false
+	}
+	return c.canAccessRoom(userID, roomID)
 }
 
 // canAccessRoom сообщает, состоит ли пользователь userID в комнате roomID.

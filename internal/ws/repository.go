@@ -14,4 +14,9 @@ type Repository interface {
 	UpdateTaskStatus(taskID string, newStatus string, acceptedBy []string) error
 	MarkMessagesAsRead(roomID, userID string) error
 	AcceptTask(taskID, userID string) (*entity.TaskMetadata, error)
+	// GetTaskRoom — нужен, чтобы проверять membership по РЕАЛЬНОЙ комнате
+	// задачи, а не по той, что просто прислал клиент в msg.Receiver (см.
+	// eventloop: без этой проверки любой участник ЛЮБОЙ своей комнаты мог
+	// менять статус чужой задачи, просто зная её id).
+	GetTaskRoom(taskID string) (string, error)
 }
