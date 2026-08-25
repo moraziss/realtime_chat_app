@@ -429,46 +429,101 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  Widget _buildAttachOption(BuildContext context, IconData icon, String title, Color color, VoidCallback onTap) {
+    return ListTile(
+      onTap: onTap,
+      leading: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(12)),
+        child: Icon(icon, color: color),
+      ),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+    );
+  }
+
+  void _openAttachSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (BuildContext sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Center(
+                child: Container(
+                  margin: const EdgeInsets.only(top: 12, bottom: 4),
+                  width: 40,
+                  height: 5,
+                  decoration: BoxDecoration(color: Colors.grey.withOpacity(0.3), borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.fromLTRB(20, 12, 20, 8),
+                child: Text('Прикрепить файл', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+              ),
+              _buildAttachOption(sheetContext, Icons.image_rounded, 'Фото или видео', Colors.blue, () {
+                Navigator.pop(sheetContext);
+                _handleFileSelection(isImage: true);
+              }),
+              _buildAttachOption(sheetContext, Icons.insert_drive_file_rounded, 'Документ', Colors.orange, () {
+                Navigator.pop(sheetContext);
+                _handleFileSelection(isImage: false);
+              }),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final headerForeground = isDark ? colorScheme.onSurface : Colors.white;
+    final String titleInitial = (_displayTitle != null && _displayTitle!.isNotEmpty) ? _displayTitle!.substring(0, 1).toUpperCase() : '?';
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_displayTitle ?? 'Чат', style: const TextStyle(fontWeight: FontWeight.bold)),
-        actions: [
-          IconButton(icon: const Icon(Icons.attach_file), onPressed: () {
-            showModalBottomSheet<void>(
-              context: context,
-              shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-              builder: (BuildContext context) => SafeArea(
-                child: SizedBox(
-                  height: 160,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: <Widget>[
-                      const Padding(
-                        padding: EdgeInsets.all(16.0),
-                        child: Text('Прикрепить', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                      ),
-                      ListTile(
-                        leading: const Icon(Icons.image, color: Colors.blue),
-                        title: const Text('Фото или видео'),
-                        onTap: () { Navigator.pop(context); _handleFileSelection(isImage: true); },
-                      ),
-                      ListTile(
-                        leading: const Icon(Icons.insert_drive_file, color: Colors.orange),
-                        title: const Text('Документ'),
-                        onTap: () { Navigator.pop(context); _handleFileSelection(isImage: false); },
-                      ),
-                    ],
-                  ),
-                ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        foregroundColor: headerForeground,
+        iconTheme: IconThemeData(color: headerForeground),
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: isDark ? [colorScheme.surface, colorScheme.surface] : [colorScheme.primary, colorScheme.primaryContainer],
+            ),
+          ),
+        ),
+        title: Row(
+          children: [
+            CircleAvatar(
+              radius: 18,
+              backgroundColor: headerForeground.withOpacity(0.2),
+              child: Text(titleInitial, style: TextStyle(fontWeight: FontWeight.w800, color: headerForeground)),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                _displayTitle ?? 'Чат',
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontWeight: FontWeight.w800, color: headerForeground),
               ),
-            );
-          }),
-          IconButton(icon: const Icon(Icons.add_task), onPressed: _openTaskPanel),
+            ),
+          ],
+        ),
+        actions: [
+          IconButton(icon: const Icon(Icons.attach_file_rounded), onPressed: _openAttachSheet),
+          IconButton(icon: const Icon(Icons.add_task_rounded), onPressed: _openTaskPanel),
+          const SizedBox(width: 4),
         ],
       ),
       body: RefreshIndicator(
@@ -477,21 +532,16 @@ class _ChatScreenState extends State<ChatScreen> {
           valueListenable: appFontSizeNotifier,
           builder: (context, fontSizeFactor, child) {
             const double baseFontSize = 17.0;
-            
-            final chatTheme = isDark
-                ? ChatTheme.dark().copyWith(
-              typography: ChatTheme.dark().typography.copyWith(
-                bodyMedium: TextStyle(
+
+            // Строим тему чата из текущей ColorScheme приложения, чтобы пузыри
+            // сообщений подхватывали акцентный цвет, выбранный в настройках,
+            // а не были жёстко закреплены на чёрном/белом.
+            final baseChatTheme = ChatTheme.fromThemeData(theme);
+            final chatTheme = baseChatTheme.copyWith(
+              shape: const BorderRadius.all(Radius.circular(18)),
+              typography: baseChatTheme.typography.copyWith(
+                bodyMedium: baseChatTheme.typography.bodyMedium.copyWith(
                   fontSize: baseFontSize * fontSizeFactor,
-                  color: Colors.white,
-                ),
-              ),
-            )
-                : ChatTheme.light().copyWith(
-              typography: ChatTheme.light().typography.copyWith(
-                bodyMedium: TextStyle(
-                  fontSize: baseFontSize * fontSizeFactor,
-                  color: Colors.black87,
                 ),
               ),
             );
