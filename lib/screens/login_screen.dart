@@ -17,7 +17,17 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool _isLogin = true;
   bool _isLoading = false;
+  bool _obscurePassword = true;
+  bool _appeared = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() => _appeared = true);
+    });
+  }
 
   @override
   void dispose() {
@@ -88,29 +98,58 @@ class _LoginScreenState extends State<LoginScreen> {
       context: context,
       barrierDismissible: false,
       builder: (ctx) {
+        final colorScheme = Theme.of(ctx).colorScheme;
         return StatefulBuilder(
           builder: (context, setStateDialog) {
             return AlertDialog(
-              title: const Text('Подтверждение Email'),
+              contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
+              title: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: colorScheme.primaryContainer,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.mark_email_read_rounded, color: colorScheme.onPrimaryContainer, size: 28),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('Подтверждение Email', textAlign: TextAlign.center),
+                ],
+              ),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('Мы отправили код подтверждения на:\n$email', textAlign: TextAlign.center,),
-                  const SizedBox(height: 16),
+                  Text.rich(
+                    TextSpan(
+                      text: 'Мы отправили 6-значный код на\n',
+                      children: [
+                        TextSpan(
+                          text: email,
+                          style: TextStyle(fontWeight: FontWeight.w800, color: colorScheme.onSurface),
+                        ),
+                      ],
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 20),
                   TextField(
                     controller: codeController,
                     decoration: InputDecoration(
-                      labelText: '6-значный код',
                       errorText: dialogError,
-                      border: const OutlineInputBorder(),
+                      counterText: '',
                     ),
                     keyboardType: TextInputType.number,
                     maxLength: 6,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 24, letterSpacing: 8),
+                    autofocus: true,
+                    style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, letterSpacing: 10),
                   ),
                 ],
               ),
+              actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               actions: [
                 TextButton(
                   onPressed: isVerifying ? null : () => Navigator.pop(ctx),
@@ -146,7 +185,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     }
                   },
                   child: isVerifying
-                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                       : const Text('Подтвердить'),
                 ),
               ],
@@ -157,95 +196,279 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  void _switchMode(bool toLogin) {
+    if (_isLogin == toLogin) return;
+    setState(() {
+      _isLogin = toLogin;
+      _error = null;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final size = MediaQuery.of(context).size;
+
     return Scaffold(
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.chat, size: 80, color: Colors.blue),
-              const SizedBox(height: 24),
-              Text(
-                _isLogin ? 'Вход' : 'Регистрация',
-                style: Theme.of(context).textTheme.headlineMedium,
+      body: Stack(
+        children: [
+          // Декоративный градиентный фон
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: isDark
+                    ? [colorScheme.surface, colorScheme.surface]
+                    : [colorScheme.primary, colorScheme.primaryContainer, colorScheme.surface],
+                stops: isDark ? null : const [0.0, 0.35, 0.75],
               ),
-              const SizedBox(height: 32),
-
-              if (!_isLogin) ...[
-                TextField(
-                  controller: _nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Имя',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.person),
-                  ),
-                ),
-                const SizedBox(height: 16),
-              ],
-
-              TextField(
-                controller: _emailController,
-                decoration: const InputDecoration(
-                  labelText: 'Email',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.email),
-                ),
-                keyboardType: TextInputType.emailAddress,
+            ),
+          ),
+          if (!isDark) ...[
+            Positioned(
+              top: -60,
+              right: -40,
+              child: Container(
+                width: 220,
+                height: 220,
+                decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withOpacity(0.08)),
               ),
-              const SizedBox(height: 16),
-
-              TextField(
-                controller: _passwordController,
-                decoration: const InputDecoration(
-                  labelText: 'Пароль',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.lock),
-                ),
-                obscureText: true,
+            ),
+            Positioned(
+              top: 80,
+              left: -70,
+              child: Container(
+                width: 160,
+                height: 160,
+                decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withOpacity(0.06)),
               ),
-              const SizedBox(height: 24),
+            ),
+          ],
 
-              if (_error != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: Text(
-                    _error!,
-                    style: const TextStyle(color: Colors.red),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
+          SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: size.height - MediaQuery.of(context).padding.vertical),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const SizedBox(height: 32),
+                    AnimatedScale(
+                      scale: _appeared ? 1 : 0.6,
+                      duration: const Duration(milliseconds: 500),
+                      curve: Curves.elasticOut,
+                      child: AnimatedOpacity(
+                        opacity: _appeared ? 1 : 0,
+                        duration: const Duration(milliseconds: 300),
+                        child: Container(
+                          width: 84,
+                          height: 84,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: isDark ? colorScheme.primaryContainer : Colors.white.withOpacity(0.18),
+                            boxShadow: isDark
+                                ? []
+                                : [BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 24, offset: const Offset(0, 12))],
+                          ),
+                          child: Icon(
+                            Icons.forum_rounded,
+                            size: 42,
+                            color: isDark ? colorScheme.onPrimaryContainer : Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    AnimatedOpacity(
+                      opacity: _appeared ? 1 : 0,
+                      duration: const Duration(milliseconds: 500),
+                      child: AnimatedSlide(
+                        offset: _appeared ? Offset.zero : const Offset(0, 0.15),
+                        duration: const Duration(milliseconds: 500),
+                        curve: Curves.easeOutCubic,
+                        child: Column(
+                          children: [
+                            Text(
+                              'Realtime Chat',
+                              style: theme.textTheme.headlineSmall?.copyWith(
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: -0.5,
+                                color: isDark ? colorScheme.onSurface : Colors.white,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Общение и задачи в одном месте',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: isDark ? colorScheme.onSurfaceVariant : Colors.white.withOpacity(0.85),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 32),
 
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _submit,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
-                  child: _isLoading
-                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                      : Text(_isLogin ? 'Войти' : 'Продолжить'),
+                    AnimatedOpacity(
+                      opacity: _appeared ? 1 : 0,
+                      duration: const Duration(milliseconds: 600),
+                      child: AnimatedSlide(
+                        offset: _appeared ? Offset.zero : const Offset(0, 0.2),
+                        duration: const Duration(milliseconds: 600),
+                        curve: Curves.easeOutCubic,
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+                          decoration: BoxDecoration(
+                            color: colorScheme.surface,
+                            borderRadius: BorderRadius.circular(28),
+                            boxShadow: [
+                              BoxShadow(color: Colors.black.withOpacity(isDark ? 0.3 : 0.1), blurRadius: 30, offset: const Offset(0, 10)),
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _buildModeSwitcher(colorScheme),
+                              const SizedBox(height: 20),
+
+                              AnimatedSize(
+                                duration: const Duration(milliseconds: 250),
+                                curve: Curves.easeInOut,
+                                alignment: Alignment.topCenter,
+                                child: !_isLogin
+                                    ? Column(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    TextField(
+                                      controller: _nameController,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Имя',
+                                        prefixIcon: Icon(Icons.person_outline_rounded),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 14),
+                                  ],
+                                )
+                                    : const SizedBox.shrink(),
+                              ),
+
+                              TextField(
+                                controller: _emailController,
+                                decoration: const InputDecoration(
+                                  labelText: 'Email',
+                                  prefixIcon: Icon(Icons.alternate_email_rounded),
+                                ),
+                                keyboardType: TextInputType.emailAddress,
+                              ),
+                              const SizedBox(height: 14),
+
+                              TextField(
+                                controller: _passwordController,
+                                decoration: InputDecoration(
+                                  labelText: 'Пароль',
+                                  prefixIcon: const Icon(Icons.lock_outline_rounded),
+                                  suffixIcon: IconButton(
+                                    icon: Icon(_obscurePassword ? Icons.visibility_off_rounded : Icons.visibility_rounded),
+                                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                                  ),
+                                ),
+                                obscureText: _obscurePassword,
+                                onSubmitted: (_) => _isLoading ? null : _submit(),
+                              ),
+
+                              AnimatedSize(
+                                duration: const Duration(milliseconds: 200),
+                                alignment: Alignment.topCenter,
+                                child: _error != null
+                                    ? Padding(
+                                  padding: const EdgeInsets.only(top: 16),
+                                  child: Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                    decoration: BoxDecoration(
+                                      color: colorScheme.errorContainer.withOpacity(0.6),
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.error_outline_rounded, color: colorScheme.error, size: 20),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Text(
+                                            _error!,
+                                            style: TextStyle(color: colorScheme.onErrorContainer, fontWeight: FontWeight.w600, fontSize: 13),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                )
+                                    : const SizedBox.shrink(),
+                              ),
+
+                              const SizedBox(height: 20),
+                              ElevatedButton(
+                                onPressed: _isLoading ? null : _submit,
+                                child: _isLoading
+                                    ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white))
+                                    : Text(_isLogin ? 'Войти' : 'Продолжить'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                  ],
                 ),
               ),
-              const SizedBox(height: 16),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-              TextButton(
-                onPressed: () {
-                  setState(() {
-                    _isLogin = !_isLogin;
-                    _error = null;
-                  });
-                },
-                child: Text(
-                  _isLogin
-                      ? 'Нет аккаунта? Зарегистрироваться'
-                      : 'Уже есть аккаунт? Войти',
-                ),
-              ),
-            ],
+  Widget _buildModeSwitcher(ColorScheme colorScheme) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.withOpacity(0.6),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Expanded(child: _buildModeTab('Вход', _isLogin, colorScheme, () => _switchMode(true))),
+          Expanded(child: _buildModeTab('Регистрация', !_isLogin, colorScheme, () => _switchMode(false))),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModeTab(String label, bool selected, ColorScheme colorScheme, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOut,
+        padding: const EdgeInsets.symmetric(vertical: 11),
+        decoration: BoxDecoration(
+          color: selected ? colorScheme.primary : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontWeight: FontWeight.w800,
+            fontSize: 13.5,
+            color: selected ? colorScheme.onPrimary : colorScheme.onSurfaceVariant,
           ),
         ),
       ),
