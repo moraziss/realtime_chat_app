@@ -33,6 +33,7 @@ class TaskCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     final meta = message.metadata ?? {};
 
     final taskId = meta['task_id']?.toString() ?? '';
@@ -92,8 +93,8 @@ class TaskCard extends StatelessWidget {
             children: [
               Container(
                 padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: Colors.blue.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-                child: Icon(Icons.assignment_turned_in, color: Colors.blue.shade700, size: 20),
+                decoration: BoxDecoration(color: colorScheme.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                child: Icon(Icons.assignment_turned_in_rounded, color: colorScheme.primary, size: 20),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -142,6 +143,7 @@ class TaskCard extends StatelessWidget {
   Widget _buildSubtasksArea(BuildContext context, List<Map<String, dynamic>> subtasks, String taskId) {
     int completed = subtasks.where((s) => s['is_done'] == true).length;
     double progress = subtasks.isEmpty ? 0 : completed / subtasks.length;
+    final colorScheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
@@ -158,7 +160,7 @@ class TaskCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text('Подзадачи', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-              Text('$completed из ${subtasks.length}', style: TextStyle(color: Colors.blue.shade700, fontSize: 11, fontWeight: FontWeight.bold)),
+              Text('$completed из ${subtasks.length}', style: TextStyle(color: colorScheme.primary, fontSize: 11, fontWeight: FontWeight.bold)),
             ],
           ),
           const SizedBox(height: 6),
@@ -167,7 +169,7 @@ class TaskCard extends StatelessWidget {
             child: LinearProgressIndicator(
               value: progress,
               backgroundColor: Colors.grey.shade200,
-              color: progress == 1.0 ? Colors.green : Colors.blue,
+              color: progress == 1.0 ? Colors.green : colorScheme.primary,
               minHeight: 4, // Тонкий прогресс-бар
             ),
           ),
