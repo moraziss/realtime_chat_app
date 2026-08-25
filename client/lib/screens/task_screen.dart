@@ -59,11 +59,33 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final headerForeground = isDark ? colorScheme.onSurface : Colors.white;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Моя доска', style: TextStyle(fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        foregroundColor: headerForeground,
+        iconTheme: IconThemeData(color: headerForeground),
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: isDark ? [colorScheme.surface, colorScheme.surface] : [colorScheme.primary, colorScheme.primaryContainer],
+            ),
+          ),
+        ),
+        title: Text('Моя доска', style: TextStyle(fontWeight: FontWeight.w800, color: headerForeground)),
         bottom: TabBar(
           controller: _tabController,
+          labelColor: headerForeground,
+          unselectedLabelColor: headerForeground.withOpacity(0.6),
+          indicatorColor: headerForeground,
+          indicatorSize: TabBarIndicatorSize.label,
           tabs: const [
             Tab(text: 'Нужно сделать'),
             Tab(text: 'В работе'),
@@ -78,16 +100,16 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
             : TabBarView(
                 controller: _tabController,
                 children: [
-                  _buildTaskColumn('todo'),
-                  _buildTaskColumn('in_progress'),
-                  _buildTaskColumn('done'),
+                  _buildTaskColumn('todo', colorScheme),
+                  _buildTaskColumn('in_progress', colorScheme),
+                  _buildTaskColumn('done', colorScheme),
                 ],
               ),
       ),
     );
   }
 
-  Widget _buildTaskColumn(String status) {
+  Widget _buildTaskColumn(String status, ColorScheme colorScheme) {
     final tasks = _allTasks.where((t) => t['status'] == status).toList();
     if (tasks.isEmpty) {
       return LayoutBuilder(
@@ -99,8 +121,9 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.inbox, size: 64, color: Colors.grey.shade300),
-                  const Text('Задач пока нет', style: TextStyle(color: Colors.grey)),
+                  Icon(Icons.inbox_rounded, size: 60, color: colorScheme.outline.withOpacity(0.5)),
+                  const SizedBox(height: 16),
+                  Text('Задач пока нет', style: TextStyle(color: colorScheme.outline, fontSize: 16)),
                 ],
               ),
             ),

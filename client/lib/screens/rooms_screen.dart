@@ -316,10 +316,10 @@ class _RoomsScreenState extends State<RoomsScreen> {
                                 Container(
                                   padding: const EdgeInsets.all(6),
                                   decoration: BoxDecoration(
-                                    color: Colors.yellowAccent.withOpacity(0.2),
+                                    color: Colors.white.withOpacity(0.2),
                                     borderRadius: BorderRadius.circular(8),
                                   ),
-                                  child: const Icon(Icons.bolt, color: Colors.yellowAccent, size: 20),
+                                  child: const Icon(Icons.bolt, color: Colors.white, size: 20),
                                 ),
                                 const SizedBox(width: 10),
                                 Text(
