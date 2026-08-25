@@ -1,7 +1,6 @@
 package ws
 
 import (
-	"Real-time-Chat/internal/database"
 	"Real-time-Chat/internal/pkg/token"
 	"Real-time-Chat/internal/repository"
 	"encoding/json"
@@ -56,10 +55,10 @@ type Chat struct {
 	sessions  *Sessions
 	lookup    *Table
 	rooms     *Table // ← убираем TableInMemory, используем просто Table
-	db        *database.Conn
+	db        Repository
 }
 
-func New(db *database.Conn) *Chat {
+func New(db Repository) *Chat {
 	c := Chat{
 		broadcast: make(chan Message, defaultBroadcastQueueSize),
 		quit:      make(chan struct{}),
