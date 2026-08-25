@@ -5,13 +5,14 @@ import (
 	"Real-time-Chat/internal/controller"
 	"Real-time-Chat/internal/database"
 	"Real-time-Chat/internal/entity"
+	"Real-time-Chat/internal/logging"
 	"Real-time-Chat/internal/pkg/token"
 	"Real-time-Chat/internal/service"
 	"Real-time-Chat/internal/ws"
 	"context"
 	"encoding/json"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -72,12 +73,17 @@ func withCORS(allowedOrigins map[string]struct{}) func(http.Handler) http.Handle
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatal(err)
+		// Логгер ещё не настроен (для этого нужен cfg.Env) — используем
+		// временный обработчик только для этой единственной ошибки.
+		slog.New(slog.NewJSONHandler(os.Stderr, nil)).Error("failed to load config", "err", err)
+		os.Exit(1)
 	}
+	slog.SetDefault(logging.New(cfg.Env))
 
 	db, err := database.New(cfg.DBUser, cfg.DBPass, cfg.DBName, cfg.DBHost)
 	if err != nil {
-		log.Fatal(err)
+		slog.Error("failed to connect to database", "err", err)
+		os.Exit(1)
 	}
 	defer db.Close()
 
@@ -230,7 +236,7 @@ func main() {
 	addr := ":" + cfg.Port
 	srv := &http.Server{
 		Addr:         addr,
-		Handler:      withCORS(cfg.AllowedOrigins)(router),
+		Handler:      withCORS(cfg.AllowedOrigins)(logging.WithRequestID(router)),
 		WriteTimeout: 15 * time.Second,
 		ReadTimeout:  15 * time.Second,
 	}
@@ -239,9 +245,10 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 
 	go func() {
-		log.Printf("сервер запущен на порту %s\n", cfg.Port)
+		slog.Info("server started", "port", cfg.Port)
 		if err := srv.ListenAndServe(); err != http.ErrServerClosed {
-			log.Fatal(err)
+			slog.Error("server failed", "err", err)
+			os.Exit(1)
 		}
 	}()
 
@@ -249,9 +256,10 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {
-		log.Fatal(err)
+		slog.Error("graceful shutdown failed", "err", err)
+		os.Exit(1)
 	}
-	log.Println("сервер остановлен")
+	slog.Info("server stopped")
 }
 
 type middleware func(httprouter.Handle) httprouter.Handle

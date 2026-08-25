@@ -2,12 +2,12 @@ package service
 
 import (
 	"Real-time-Chat/internal/entity"
+	"Real-time-Chat/internal/logging"
 	"Real-time-Chat/internal/pkg/token"
 	"Real-time-Chat/internal/pkg/utils"
 	"Real-time-Chat/internal/repository"
 	"context"
 	"errors"
-	"log"
 	"strings"
 	"time"
 )
@@ -44,12 +44,12 @@ func NewSendCodeService(repo repository.User, emailSender EmailSender) SendCode 
 		expiresAt := time.Now().Add(15 * time.Minute)
 
 		if err := repo.SaveVerificationCode(email, code, expiresAt); err != nil {
-			log.Printf("DB Error saving code: %v", err)
+			logging.FromContext(ctx).Error("failed to save verification code", "err", err)
 			return nil, err
 		}
 
 		if err := emailSender.SendVerificationCode(email, code); err != nil {
-			log.Printf("Email Error sending code to %s: %v", email, err)
+			logging.FromContext(ctx).Error("failed to send verification email", "email", email, "err", err)
 			return nil, errors.New("не удалось отправить письмо с кодом")
 		}
 
@@ -124,7 +124,7 @@ func NewRegisterService(repo repository.User, signer token.Signer) Register {
 		// 1. Проверяем код
 		isValid, err := repo.CheckVerificationCode(req.Email, req.Code)
 		if err != nil {
-			log.Printf("DB Error checking code: %v", err)
+			logging.FromContext(ctx).Error("failed to check verification code", "err", err)
 			return nil, err
 		}
 		if !isValid {
@@ -143,7 +143,7 @@ func NewRegisterService(repo repository.User, signer token.Signer) Register {
 			return nil, err
 		}
 		if err = repo.CreateUser(user); err != nil {
-			log.Printf("DB Error creating user: %v", err)
+			logging.FromContext(ctx).Error("failed to create user", "err", err)
 			return nil, err
 		}
 

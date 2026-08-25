@@ -6,7 +6,7 @@ import (
 	"Real-time-Chat/internal/repository"
 	"encoding/json"
 	"errors"
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -68,7 +68,7 @@ func New(db *database.Conn) *Chat {
 		db:        db,
 	}
 
-	log.Println("ws: запуск event loop")
+	slog.Info("ws: event loop starting")
 	go c.eventloop()
 
 	return &c
@@ -77,7 +77,7 @@ func New(db *database.Conn) *Chat {
 func (c *Chat) Close() {
 	c.quit <- struct{}{}
 	close(c.quit)
-	log.Println("ws: остановлен")
+	slog.Info("ws: stopped")
 }
 
 func (c *Chat) Broadcast(msg Message) error {
@@ -113,7 +113,7 @@ loop:
 	for {
 		select {
 		case <-c.quit:
-			log.Println("ws: event loop остановлен")
+			slog.Info("ws: event loop stopped")
 			break loop
 
 		case msg, ok := <-c.broadcast:
@@ -121,14 +121,12 @@ loop:
 				break loop
 			}
 
-			log.Printf("ws: тип=%s отправитель=%s получатель=%s\n",
-				msg.Type, msg.Sender, msg.Receiver)
+			slog.Debug("ws: message received", "type", msg.Type, "sender", msg.Sender, "receiver", msg.Receiver)
 
 			// Отправитель должен состоять в комнате-получателе — иначе
 			// любой клиент мог слать сообщения/менять задачи в чужих комнатах.
 			if msg.Receiver != "" && !c.canAccessRoom(msg.Sender, msg.Receiver) {
-				log.Printf("ws: доступ запрещён: %s не состоит в комнате %s (тип=%s)\n",
-					msg.Sender, msg.Receiver, msg.Type)
+				slog.Warn("ws: access denied", "sender", msg.Sender, "room", msg.Receiver, "type", msg.Type)
 				continue
 			}
 
@@ -143,7 +141,7 @@ loop:
 				// Теперь мы передаем также метаданные (для файлов/фото)
 				msgID, err := c.db.CreateConversationReply(msg.Sender, msg.Receiver, msg.Text, msg.Metadata)
 				if err != nil {
-					log.Printf("ws: ошибка сохранения сообщения: %v\n", err)
+					slog.Error("ws: failed to save message", "sender", msg.Sender, "receiver", msg.Receiver, "err", err)
 					continue
 				}
 				msg.ID = msgID
@@ -155,36 +153,36 @@ loop:
 					status = msg.Text // Запасной вариант, если статус в поле data/text
 				}
 
-				log.Printf("Обновление задачи в БД: ID=%s, Status=%s", msg.TaskID, status)
+				slog.Debug("ws: updating task", "task_id", msg.TaskID, "status", status)
 
 				err := c.db.UpdateTaskStatus(msg.TaskID, status, nil)
 				if err != nil {
-					log.Printf("ws: ошибка обновления задачи: %v\n", err)
+					slog.Error("ws: failed to update task", "task_id", msg.TaskID, "err", err)
 					continue
 				}
 
 			case "read":
-				log.Printf("Чат: пользователь %s прочитал сообщения в комнате %s", msg.Sender, msg.Receiver)
+				slog.Debug("ws: messages marked read", "sender", msg.Sender, "room", msg.Receiver)
 				err := c.db.MarkMessagesAsRead(msg.Receiver, msg.Sender)
 				if err != nil {
-					log.Printf("ws: ошибка MarkMessagesAsRead: %v\n", err)
+					slog.Error("ws: failed to mark messages read", "room", msg.Receiver, "sender", msg.Sender, "err", err)
 				}
 
 			// --- НОВЫЙ БЛОК: Обработка "рукопожатия" для старта задачи ---
 			case "task_accept":
-				log.Printf("Принятие задачи: ID=%s, User=%s", msg.TaskID, msg.Sender)
+				slog.Debug("ws: task accept requested", "task_id", msg.TaskID, "user", msg.Sender)
 
 				// Обращаемся к новому методу БД, который мы написали
 				updatedMeta, err := c.db.AcceptTask(msg.TaskID, msg.Sender)
 				if err != nil {
-					log.Printf("ws: ошибка AcceptTask: %v\n", err)
+					slog.Error("ws: failed to accept task", "task_id", msg.TaskID, "err", err)
 					continue
 				}
 
 				// Упаковываем обновленные метаданные (нужен import "encoding/json" в начале файла)
 				newMetaBytes, err := json.Marshal(updatedMeta)
 				if err != nil {
-					log.Printf("ws: ошибка маршалинга метаданных: %v\n", err)
+					slog.Error("ws: failed to marshal task metadata", "task_id", msg.TaskID, "err", err)
 					continue
 				}
 
@@ -212,7 +210,7 @@ func (c *Chat) canAccessRoom(userID, roomID string) bool {
 
 	rooms, err := c.db.GetRoom(userID)
 	if err != nil {
-		log.Printf("ws: ошибка проверки доступа к комнате: %v\n", err)
+		slog.Error("ws: failed to check room access", "user_id", userID, "room_id", roomID, "err", err)
 		return false
 	}
 	for _, r := range rooms {
@@ -231,7 +229,7 @@ func (c *Chat) newSession(ws *websocket.Conn) *Session {
 }
 
 func (c *Chat) Bind(uid UserID, sid SessionID) func() {
-	log.Printf("ws: привязка пользователя=%s сессия=%s\n", uid, sid)
+	slog.Debug("ws: binding session", "user_id", uid, "session_id", sid)
 
 	if sess := c.Get(uid); len(sess) == 0 {
 		c.Join(uid)
@@ -298,7 +296,7 @@ func (c *Chat) ServeWS(signer token.Signer, repo repository.User) httprouter.Han
 			var msg Message
 			if err := ws.ReadJSON(&msg); err != nil {
 				if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway) {
-					log.Printf("ws: неожиданное закрытие: %v\n", err)
+					slog.Warn("ws: unexpected close", "user_id", userID, "err", err)
 				}
 				break
 			}
@@ -317,7 +315,7 @@ func (c *Chat) ServeWS(signer token.Signer, repo repository.User) httprouter.Han
 func (c *Chat) Join(uid UserID) {
 	rooms, err := c.db.GetRooms(string(uid))
 	if err != nil {
-		log.Printf("ws: ошибка получения комнат: %v\n", err)
+		slog.Error("ws: failed to load rooms", "user_id", uid, "err", err)
 		return
 	}
 	for _, room := range rooms {
@@ -328,7 +326,7 @@ func (c *Chat) Join(uid UserID) {
 			Text:     MessageOnline,
 		}
 		c.rooms.AddRoom(room.RoomID, uid.String())
-		log.Printf("ws: пользователь %s вошёл в комнату %s\n", uid, room.RoomID)
+		slog.Debug("ws: user joined room", "user_id", uid, "room_id", room.RoomID)
 	}
 }
 
@@ -342,7 +340,7 @@ func (c *Chat) Leave(uid UserID) {
 		}
 	}
 	c.rooms.Delete(uid.String(), onDelete)
-	log.Printf("ws: пользователь %s вышел из всех комнат\n", uid)
+	slog.Debug("ws: user left all rooms", "user_id", uid)
 }
 
 func (c *Chat) Clear(sess *Session) {
@@ -353,7 +351,7 @@ func (c *Chat) Clear(sess *Session) {
 	sess.Conn().Close()
 	sessionID := sess.SessionID()
 	c.sessions.Delete(sessionID)
-	log.Printf("ws: сессия %s очищена\n", sessionID)
+	slog.Debug("ws: session cleared", "session_id", sessionID)
 }
 
 func (c *Chat) Get(key interface{}) []*Session {

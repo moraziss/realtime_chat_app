@@ -7,7 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log"
+	"log/slog"
 	"time"
 )
 
@@ -94,7 +94,7 @@ func parseFlexibleTime(val interface{}) *time.Time {
 	}
 	// Формат не распознан: срок просто не будет установлен. Это не приводит
 	// к ошибке API, но стоит видеть в логах, а не терять молча.
-	log.Printf("task: не удалось распознать due_date %q, срок не установлен", str)
+	slog.Warn("unrecognized due_date format, deadline not set", "value", str)
 	return nil
 }
 
