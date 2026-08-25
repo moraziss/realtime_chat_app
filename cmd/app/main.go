@@ -1,6 +1,7 @@
 package main
 
 import (
+	"Real-time-Chat/internal/apperr"
 	"Real-time-Chat/internal/config"
 	"Real-time-Chat/internal/controller"
 	"Real-time-Chat/internal/database"
@@ -11,12 +12,14 @@ import (
 	"Real-time-Chat/internal/ws"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"syscall"
 	"time"
@@ -68,6 +71,22 @@ func withCORS(allowedOrigins map[string]struct{}) func(http.Handler) http.Handle
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// withRecover ловит панику в любом HTTP-обработчике и превращает её в 500
+// вместо падения всего процесса. Логирует полный стек, клиенту отдаёт только
+// generic-сообщение через тот же apperr-конверт, что и остальные ошибки.
+func withRecover(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if rec := recover(); rec != nil {
+				logging.FromContext(r.Context()).Error("panic recovered",
+					"panic", rec, "stack", string(debug.Stack()), "path", r.URL.Path)
+				apperr.WriteError(w, r, apperr.Internal(fmt.Errorf("panic: %v", rec)))
+			}
+		}()
+		next.ServeHTTP(w, r)
+	})
 }
 
 func main() {
@@ -174,20 +193,20 @@ func main() {
 	router.POST("/upload", authorized(func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 		r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
 		if err := r.ParseMultipartForm(10 << 20); err != nil {
-			http.Error(w, `{"error": "file too large or malformed form"}`, http.StatusBadRequest)
+			apperr.WriteError(w, r, apperr.Validation("file too large or malformed form"))
 			return
 		}
 
 		file, handler, err := r.FormFile("file")
 		if err != nil {
-			http.Error(w, `{"error": "No file received"}`, http.StatusBadRequest)
+			apperr.WriteError(w, r, apperr.Validation("no file received"))
 			return
 		}
 		defer file.Close()
 
 		ext := strings.ToLower(filepath.Ext(handler.Filename))
 		if dangerousUploadExt[ext] {
-			http.Error(w, `{"error": "file type not allowed"}`, http.StatusBadRequest)
+			apperr.WriteError(w, r, apperr.Validation("file type not allowed"))
 			return
 		}
 
@@ -198,13 +217,13 @@ func main() {
 
 		dst, err := os.Create(savePath)
 		if err != nil {
-			http.Error(w, `{"error": "Failed to create file on server"}`, http.StatusInternalServerError)
+			apperr.WriteError(w, r, apperr.Internal(err))
 			return
 		}
 		defer dst.Close()
 
 		if _, err := io.Copy(dst, file); err != nil {
-			http.Error(w, `{"error": "Failed to save file"}`, http.StatusInternalServerError)
+			apperr.WriteError(w, r, apperr.Internal(err))
 			return
 		}
 
@@ -226,7 +245,7 @@ func main() {
 	router.GET("/users/me/extended-stats", authorized(func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 		res, err := getExtendedStatsService(r.Context())
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			apperr.WriteError(w, r, err)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -236,7 +255,7 @@ func main() {
 	addr := ":" + cfg.Port
 	srv := &http.Server{
 		Addr:         addr,
-		Handler:      withCORS(cfg.AllowedOrigins)(logging.WithRequestID(router)),
+		Handler:      withCORS(cfg.AllowedOrigins)(logging.WithRequestID(withRecover(router))),
 		WriteTimeout: 15 * time.Second,
 		ReadTimeout:  15 * time.Second,
 	}
@@ -270,17 +289,17 @@ func authMiddleware(signer token.Signer) middleware {
 			auth := r.Header.Get("Authorization")
 			values := strings.Split(auth, " ")
 			if len(values) != 2 {
-				http.Error(w, "отсутствует заголовок авторизации", http.StatusUnauthorized)
+				apperr.WriteError(w, r, apperr.Unauthorized("отсутствует заголовок авторизации"))
 				return
 			}
 			bearer, tok := values[0], values[1]
 			if bearer != "Bearer" {
-				http.Error(w, "неверный тип токена", http.StatusUnauthorized)
+				apperr.WriteError(w, r, apperr.Unauthorized("неверный тип токена"))
 				return
 			}
 			userID, err := signer.Verify(tok)
 			if err != nil {
-				http.Error(w, err.Error(), http.StatusUnauthorized)
+				apperr.WriteError(w, r, apperr.Unauthorized("недействительный или просроченный токен"))
 				return
 			}
 			ctx := context.WithValue(r.Context(), entity.ContextKeyUserID, userID)

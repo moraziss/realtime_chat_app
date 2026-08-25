@@ -1,10 +1,10 @@
 package service
 
 import (
+	"Real-time-Chat/internal/apperr"
 	"Real-time-Chat/internal/entity"
 	"Real-time-Chat/internal/repository"
 	"context"
-	"errors"
 )
 
 type GetConversationsRequest struct {
@@ -25,7 +25,7 @@ func NewGetConversationsService(repo repository.Conversation, rooms interface {
 		userID, _ := ctx.Value(entity.ContextKeyUserID).(string)
 		userRooms, err := rooms.GetRoom(userID)
 		if err != nil {
-			return nil, err
+			return nil, apperr.Internal(err)
 		}
 		isMember := false
 		for _, id := range userRooms {
@@ -35,12 +35,12 @@ func NewGetConversationsService(repo repository.Conversation, rooms interface {
 			}
 		}
 		if !isMember {
-			return nil, errors.New("доступ запрещён: вы не состоите в этой комнате")
+			return nil, apperr.Forbidden("доступ запрещён: вы не состоите в этой комнате")
 		}
 
 		conversations, err := repo.GetConversations(req.RoomID)
 		if err != nil {
-			return nil, err
+			return nil, apperr.Internal(err)
 		}
 		return &GetConversationsResponse{
 			Data: conversations,

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"runtime/debug"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -100,7 +101,19 @@ func (c *Chat) Broadcast(msg Message) error {
 	return firstErr
 }
 
+// eventloop — единственная долгоживущая горутина, через которую проходят все
+// WS-события. recover() здесь обязателен: без него один паникующий обработчик
+// (например, неожиданный тип в metadata) убил бы обработку сообщений для
+// вообще всех подключённых клиентов, а не только для одного отправителя.
+// Восстанавливаемся и перезапускаем цикл, а не даём процессу упасть целиком.
 func (c *Chat) eventloop() {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("ws: event loop panic, restarting", "panic", r, "stack", string(debug.Stack()))
+			go c.eventloop()
+		}
+	}()
+
 	getStatus := func(user string) string {
 		sessions := c.Get(UserID(user))
 		if len(sessions) == 0 {

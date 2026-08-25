@@ -1,12 +1,12 @@
 package service
 
 import (
+	"Real-time-Chat/internal/apperr"
 	"Real-time-Chat/internal/entity"
 	"Real-time-Chat/internal/repository"
 	"Real-time-Chat/internal/ws"
 	"context"
 	"encoding/json"
-	"errors"
 	"log/slog"
 	"time"
 )
@@ -42,11 +42,11 @@ func NewGetTasksService(repo repository.Task, rooms interface {
 	return func(ctx context.Context, req GetTasksRequest) (*GetTasksResponse, error) {
 		userID, _ := ctx.Value(entity.ContextKeyUserID).(string)
 		if !isRoomMember(rooms, userID, req.RoomID) {
-			return nil, errors.New("доступ запрещён: вы не состоите в этой комнате")
+			return nil, apperr.Forbidden("доступ запрещён: вы не состоите в этой комнате")
 		}
 		tasks, err := repo.GetTasks(req.RoomID)
 		if err != nil {
-			return nil, err
+			return nil, apperr.Internal(err)
 		}
 		return &GetTasksResponse{Data: tasks}, nil
 	}
@@ -103,12 +103,12 @@ func NewCreateTaskService(repo repository.Task, chatHub *ws.Chat, rooms interfac
 }) CreateTask {
 	return func(ctx context.Context, req CreateTaskRequest) (*CreateTaskResponse, error) {
 		if req.Title == "" {
-			return nil, errors.New("title is required")
+			return nil, apperr.Validation("title is required")
 		}
 
 		userID, _ := ctx.Value(entity.ContextKeyUserID).(string)
 		if !isRoomMember(rooms, userID, req.RoomID) {
-			return nil, errors.New("доступ запрещён: вы не состоите в этой комнате")
+			return nil, apperr.Forbidden("доступ запрещён: вы не состоите в этой комнате")
 		}
 
 		var assignedToPtr *string
@@ -132,7 +132,7 @@ func NewCreateTaskService(repo repository.Task, chatHub *ws.Chat, rooms interfac
 
 		taskID, msgID, err := repo.CreateTaskWithMessage(task)
 		if err != nil {
-			return nil, err
+			return nil, apperr.Internal(err)
 		}
 
 		metaMap := map[string]interface{}{
@@ -190,16 +190,16 @@ func NewUpdateTaskService(repo repository.Task, chatHub *ws.Chat, rooms interfac
 		userID, _ := ctx.Value(entity.ContextKeyUserID).(string)
 		taskRoomID, err := repo.GetTaskRoom(req.ID)
 		if err != nil {
-			return nil, err
+			return nil, apperr.Internal(err)
 		}
 		if !isRoomMember(rooms, userID, taskRoomID) {
-			return nil, errors.New("доступ запрещён: вы не состоите в комнате этой задачи")
+			return nil, apperr.Forbidden("доступ запрещён: вы не состоите в комнате этой задачи")
 		}
 
 		if req.Title == "" && req.Priority == "" && req.Status != "" {
 			err := repo.UpdateTaskStatus(req.ID, req.Status, req.AcceptedBy)
 			if err != nil {
-				return nil, err
+				return nil, apperr.Internal(err)
 			}
 
 			// Рассылаем уведомление об обновлении статуса через WebSocket
@@ -237,7 +237,7 @@ func NewUpdateTaskService(repo repository.Task, chatHub *ws.Chat, rooms interfac
 		}
 
 		if err := repo.UpdateTask(task); err != nil {
-			return nil, err
+			return nil, apperr.Internal(err)
 		}
 
 		// Рассылаем уведомление о полном обновлении задачи
@@ -268,14 +268,14 @@ func NewDeleteTaskService(repo repository.Task, rooms interface {
 		userID, _ := ctx.Value(entity.ContextKeyUserID).(string)
 		taskRoomID, err := repo.GetTaskRoom(req.ID)
 		if err != nil {
-			return nil, err
+			return nil, apperr.Internal(err)
 		}
 		if !isRoomMember(rooms, userID, taskRoomID) {
-			return nil, errors.New("доступ запрещён: вы не состоите в комнате этой задачи")
+			return nil, apperr.Forbidden("доступ запрещён: вы не состоите в комнате этой задачи")
 		}
 
 		if err := repo.DeleteTask(req.ID); err != nil {
-			return nil, err
+			return nil, apperr.Internal(err)
 		}
 		return &DeleteTaskResponse{Status: true}, nil
 	}

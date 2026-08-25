@@ -1,10 +1,10 @@
 package service
 
 import (
+	"Real-time-Chat/internal/apperr"
 	"Real-time-Chat/internal/entity"
 	"Real-time-Chat/internal/repository"
 	"context"
-	"errors"
 )
 
 type GetRoomsRequest struct{}
@@ -19,11 +19,11 @@ func NewGetRoomsService(repo repository.Room) GetRooms {
 	return func(ctx context.Context, req GetRoomsRequest) (*GetRoomsResponse, error) {
 		userID, _ := ctx.Value(entity.ContextKeyUserID).(string)
 		if userID == "" {
-			return nil, errors.New("user_id is required")
+			return nil, apperr.Validation("user_id is required")
 		}
 		rooms, err := repo.GetRooms(userID)
 		if err != nil {
-			return nil, err
+			return nil, apperr.Internal(err)
 		}
 		return &GetRoomsResponse{Data: rooms}, nil
 	}
@@ -43,7 +43,7 @@ type PostRooms func(ctx context.Context, req PostRoomsRequest) (*PostRoomsRespon
 func NewPostRoomsService(repo repository.Room) PostRooms {
 	return func(ctx context.Context, req PostRoomsRequest) (*PostRoomsResponse, error) {
 		if req.FriendID == "" {
-			return nil, errors.New("friend_id is required")
+			return nil, apperr.Validation("friend_id is required")
 		}
 
 		// ПРОВЕРКА: существует ли уже чат между этими пользователями
@@ -61,7 +61,7 @@ func NewPostRoomsService(repo repository.Room) PostRooms {
 		// Если чата нет, создаем новый
 		roomID, err := repo.CreateRoom(req.UserID, req.FriendID)
 		if err != nil {
-			return nil, err
+			return nil, apperr.Internal(err)
 		}
 		return &PostRoomsResponse{
 			Data: entity.UserRoom{

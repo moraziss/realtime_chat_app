@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"Real-time-Chat/internal/apperr"
 	"Real-time-Chat/internal/entity"
 	"Real-time-Chat/internal/service"
 	"encoding/json"
@@ -13,7 +14,7 @@ func (c *Controller) GetRooms(svc service.GetRooms) httprouter.Handle {
 	return func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		res, err := svc(r.Context(), service.GetRoomsRequest{})
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			apperr.WriteError(w, r, err)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -28,14 +29,14 @@ func (c *Controller) PostRooms(svc service.PostRooms) httprouter.Handle {
 
 		var req service.PostRoomsRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			apperr.WriteError(w, r, apperr.Validation("invalid request body"))
 			return
 		}
 		req.UserID = userID
 
 		res, err := svc(ctx, req)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			apperr.WriteError(w, r, err)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")

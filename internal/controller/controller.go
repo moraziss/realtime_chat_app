@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"Real-time-Chat/internal/apperr"
 	"Real-time-Chat/internal/service"
 	"encoding/json"
 	"net/http"
@@ -21,7 +22,7 @@ func (c *Controller) PostAuthorize(svc service.Authorize) httprouter.Handle {
 		var req service.AuthorizeRequest
 		res, err := svc(r.Context(), req)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			apperr.WriteError(w, r, err)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -35,7 +36,7 @@ func (c *Controller) GetConversations(svc service.GetConversations) httprouter.H
 			RoomID: ps.ByName("id"),
 		})
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			apperr.WriteError(w, r, err)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -47,12 +48,12 @@ func (c *Controller) PostLogin(svc service.Login) httprouter.Handle {
 	return func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		var req service.LoginRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			apperr.WriteError(w, r, apperr.Validation("invalid request body"))
 			return
 		}
 		res, err := svc(r.Context(), req)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			apperr.WriteError(w, r, err)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -64,12 +65,12 @@ func (c *Controller) PostRegister(svc service.Register) httprouter.Handle {
 	return func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		var req service.RegisterRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			apperr.WriteError(w, r, apperr.Validation("invalid request body"))
 			return
 		}
 		res, err := svc(r.Context(), req)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			apperr.WriteError(w, r, err)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -81,13 +82,13 @@ func (c *Controller) PostSendCode(svc service.SendCode) httprouter.Handle {
 	return func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 		var req service.SendCodeRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			apperr.WriteError(w, r, apperr.Validation("invalid request body"))
 			return
 		}
 
 		res, err := svc(r.Context(), req)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			apperr.WriteError(w, r, err)
 			return
 		}
 

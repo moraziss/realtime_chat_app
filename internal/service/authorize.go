@@ -1,13 +1,13 @@
 package service
 
 import (
+	"Real-time-Chat/internal/apperr"
 	"Real-time-Chat/internal/entity"
 	"Real-time-Chat/internal/logging"
 	"Real-time-Chat/internal/pkg/token"
 	"Real-time-Chat/internal/pkg/utils"
 	"Real-time-Chat/internal/repository"
 	"context"
-	"errors"
 	"strings"
 	"time"
 )
@@ -28,16 +28,16 @@ func NewSendCodeService(repo repository.User, emailSender EmailSender) SendCode 
 	return func(ctx context.Context, req SendCodeRequest) (*SendCodeResponse, error) {
 		email := strings.ToLower(strings.TrimSpace(req.Email))
 		if email == "" {
-			return nil, errors.New("email is required")
+			return nil, apperr.Validation("email is required")
 		}
 
 		// Проверяем, не зарегистрирован ли уже такой пользователь
 		_, err := repo.GetUserByEmail(email)
 		if err != entity.ErrUserNotFound {
 			if err == nil {
-				return nil, errors.New("пользователь с такой почтой уже существует")
+				return nil, apperr.Validation("пользователь с такой почтой уже существует")
 			}
-			return nil, err
+			return nil, apperr.Internal(err)
 		}
 
 		code := utils.GenerateVerificationCode()
@@ -45,12 +45,12 @@ func NewSendCodeService(repo repository.User, emailSender EmailSender) SendCode 
 
 		if err := repo.SaveVerificationCode(email, code, expiresAt); err != nil {
 			logging.FromContext(ctx).Error("failed to save verification code", "err", err)
-			return nil, err
+			return nil, apperr.Internal(err)
 		}
 
 		if err := emailSender.SendVerificationCode(email, code); err != nil {
 			logging.FromContext(ctx).Error("failed to send verification email", "email", email, "err", err)
-			return nil, errors.New("не удалось отправить письмо с кодом")
+			return nil, apperr.Internal(err)
 		}
 
 		return &SendCodeResponse{Message: "Код отправлен на почту"}, nil
@@ -95,16 +95,16 @@ func (r *RegisterRequest) Validate() error {
 	r.ConfirmEmail = strings.ToLower(strings.TrimSpace(r.ConfirmEmail))
 
 	if r.Email == "" {
-		return errors.New("email is required")
+		return apperr.Validation("email is required")
 	}
 	if r.Email != r.ConfirmEmail {
-		return errors.New("email does not match")
+		return apperr.Validation("email does not match")
 	}
 	if r.Name == "" {
-		return errors.New("name is required")
+		return apperr.Validation("name is required")
 	}
 	if r.Code == "" {
-		return errors.New("code is required")
+		return apperr.Validation("code is required")
 	}
 	return nil
 }
@@ -125,26 +125,26 @@ func NewRegisterService(repo repository.User, signer token.Signer) Register {
 		isValid, err := repo.CheckVerificationCode(req.Email, req.Code)
 		if err != nil {
 			logging.FromContext(ctx).Error("failed to check verification code", "err", err)
-			return nil, err
+			return nil, apperr.Internal(err)
 		}
 		if !isValid {
-			return nil, errors.New("неверный или просроченный код подтверждения")
+			return nil, apperr.Validation("неверный или просроченный код подтверждения")
 		}
 
 		// 2. Убеждаемся, что email не заняли, пока юзер вводил код
 		_, err = repo.GetUserByEmail(req.Email)
 		if err != entity.ErrUserNotFound {
-			return nil, errors.New("email already exists")
+			return nil, apperr.Validation("email already exists")
 		}
 
 		// 3. Создаем пользователя
 		user := entity.NewUser(req.Name, req.Email)
 		if err := user.SetPassword(req.Password); err != nil {
-			return nil, err
+			return nil, apperr.Validation(err.Error())
 		}
 		if err = repo.CreateUser(user); err != nil {
 			logging.FromContext(ctx).Error("failed to create user", "err", err)
-			return nil, err
+			return nil, apperr.Internal(err)
 		}
 
 		// 4. Удаляем использованный код
@@ -152,7 +152,7 @@ func NewRegisterService(repo repository.User, signer token.Signer) Register {
 
 		token, err := signer.Sign(user.ID)
 		if err != nil {
-			return nil, err
+			return nil, apperr.Internal(err)
 		}
 		return &RegisterResponse{
 			AccessToken: token,
@@ -179,14 +179,14 @@ func NewLoginService(repo repository.User, signer token.Signer) Login {
 		email := strings.ToLower(strings.TrimSpace(req.Email))
 		user, err := repo.GetUserByEmail(email)
 		if err != nil {
-			return nil, errors.New("неверный email или пароль")
+			return nil, apperr.Unauthorized("неверный email или пароль")
 		}
 		if err := user.ComparePassword(req.Password); err != nil {
-			return nil, errors.New("неверный email или пароль")
+			return nil, apperr.Unauthorized("неверный email или пароль")
 		}
 		accessToken, err := signer.Sign(user.ID)
 		if err != nil {
-			return nil, err
+			return nil, apperr.Internal(err)
 		}
 		return &LoginResponse{
 			AccessToken: accessToken,
