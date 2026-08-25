@@ -39,13 +39,19 @@ class _RoomsScreenState extends State<RoomsScreen> {
     _wsSubscription = WebSocketService().stream.listen((message) {
       if (!mounted) return;
 
-      if (message['type'] == 'message' || message['type'] == 'read' || message['type'] == 'task_created') {
+      if (message['type'] == 'message' ||
+          message['type'] == 'read' ||
+          message['type'] == 'task_created') {
         _loadRooms();
         _loadStats();
 
         if (message['type'] == 'message' && message['room'] != null) {
           final roomId = message['room'].toString();
-          final index = _rooms.indexWhere((r) => r['id']?.toString() == roomId || r['room_id']?.toString() == roomId);
+          final index = _rooms.indexWhere(
+            (r) =>
+                r['id']?.toString() == roomId ||
+                r['room_id']?.toString() == roomId,
+          );
 
           if (index > 0) {
             setState(() {
@@ -65,11 +71,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
   }
 
   Future<void> _loadAllData() async {
-    await Future.wait([
-      _loadUserProfile(),
-      _loadRooms(),
-      _loadStats(),
-    ]);
+    await Future.wait([_loadUserProfile(), _loadRooms(), _loadStats()]);
   }
 
   Future<void> _loadUserProfile() async {
@@ -156,16 +158,24 @@ class _RoomsScreenState extends State<RoomsScreen> {
                     return const Center(child: CircularProgressIndicator());
                   }
 
-                  if (snapshot.hasError || !snapshot.hasData || snapshot.data!.statusCode != 200) {
-                    return const Center(child: Text('Ошибка загрузки пользователей'));
+                  if (snapshot.hasError ||
+                      !snapshot.hasData ||
+                      snapshot.data!.statusCode != 200) {
+                    return const Center(
+                      child: Text('Ошибка загрузки пользователей'),
+                    );
                   }
 
                   final data = jsonDecode(snapshot.data!.body);
                   final users = (data['data'] as List?) ?? [];
-                  final otherUsers = users.where((u) => u['email'] != _userEmail).toList();
+                  final otherUsers = users
+                      .where((u) => u['email'] != _userEmail)
+                      .toList();
 
                   if (otherUsers.isEmpty) {
-                    return const Center(child: Text('Нет других пользователей'));
+                    return const Center(
+                      child: Text('Нет других пользователей'),
+                    );
                   }
 
                   return Column(
@@ -183,7 +193,10 @@ class _RoomsScreenState extends State<RoomsScreen> {
                         padding: EdgeInsets.all(16.0),
                         child: Text(
                           'Новый чат',
-                          style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                       Expanded(
@@ -197,30 +210,72 @@ class _RoomsScreenState extends State<RoomsScreen> {
                               duration: const Duration(milliseconds: 375),
                               child: FadeInAnimation(
                                 child: ListTile(
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 24,
+                                    vertical: 8,
+                                  ),
                                   leading: CircleAvatar(
                                     radius: 25,
-                                    backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                                    backgroundColor: Theme.of(
+                                      context,
+                                    ).colorScheme.primary.withOpacity(0.1),
                                     child: Text(
-                                      user['name']?.toString().substring(0, 1).toUpperCase() ?? '?',
-                                      style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold),
+                                      user['name']
+                                              ?.toString()
+                                              .substring(0, 1)
+                                              .toUpperCase() ??
+                                          '?',
+                                      style: TextStyle(
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.primary,
+                                        fontWeight: FontWeight.bold,
+                                      ),
                                     ),
                                   ),
-                                  title: Text(user['name'] ?? 'Без имени', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                  title: Text(
+                                    user['name'] ?? 'Без имени',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
                                   subtitle: Text(user['email'] ?? ''),
                                   onTap: () async {
                                     Navigator.pop(context);
                                     try {
                                       final targetId = user['id'].toString();
-                                      final res = await _authService.post('/rooms', {
-                                        'target_user_id': targetId,
-                                        'friend_id': targetId,
-                                      });
-                                      if (res.statusCode == 200 || res.statusCode == 201) {
+                                      final res = await _authService
+                                          .post('/rooms', {
+                                            'target_user_id': targetId,
+                                            'friend_id': targetId,
+                                          });
+                                      if (res.statusCode == 200 ||
+                                          res.statusCode == 201) {
                                         _loadRooms();
+                                      } else if (mounted) {
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          const SnackBar(
+                                            content: Text(
+                                              'Не удалось создать чат',
+                                            ),
+                                          ),
+                                        );
                                       }
                                     } catch (e) {
-                                      debugPrint('Ошибка: $e');
+                                      debugPrint('Ошибка создания чата: $e');
+                                      if (mounted) {
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          const SnackBar(
+                                            content: Text(
+                                              'Не удалось создать чат — проверьте соединение',
+                                            ),
+                                          ),
+                                        );
+                                      }
                                     }
                                   },
                                 ),
@@ -248,160 +303,217 @@ class _RoomsScreenState extends State<RoomsScreen> {
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      drawer: AppDrawer(
-        userName: _userName,
-        userEmail: _userEmail,
-      ),
-      body: RefreshIndicator(
-        onRefresh: _loadAllData,
-        child: CustomScrollView(
-          physics: const BouncingScrollPhysics(),
-          slivers: [
-            SliverAppBar(
-              expandedHeight: 320.0,
-              floating: false,
-              pinned: true,
-              backgroundColor: isDark ? colorScheme.surface : colorScheme.primary,
-              elevation: 0,
-              leading: Builder(
-                builder: (context) => IconButton(
-                  icon: const Icon(Icons.menu_open_rounded, color: Colors.white, size: 28),
-                  onPressed: () => Scaffold.of(context).openDrawer(),
-                ),
-              ),
-              flexibleSpace: FlexibleSpaceBar(
-                titlePadding: const EdgeInsets.only(left: 20, bottom: 16),
-                title: const Text(
-                  'Чаты',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 28,
-                    color: Colors.white,
-                    letterSpacing: -0.5,
+      drawer: AppDrawer(userName: _userName, userEmail: _userEmail),
+      body: Column(
+        children: [
+          _buildConnectionBanner(colorScheme),
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: _loadAllData,
+              child: CustomScrollView(
+                physics: const BouncingScrollPhysics(),
+                slivers: [
+                  SliverAppBar(
+                    expandedHeight: 320.0,
+                    floating: false,
+                    pinned: true,
+                    backgroundColor: isDark
+                        ? colorScheme.surface
+                        : colorScheme.primary,
+                    elevation: 0,
+                    leading: Builder(
+                      builder: (context) => IconButton(
+                        icon: const Icon(
+                          Icons.menu_open_rounded,
+                          color: Colors.white,
+                          size: 28,
+                        ),
+                        onPressed: () => Scaffold.of(context).openDrawer(),
+                      ),
+                    ),
+                    flexibleSpace: FlexibleSpaceBar(
+                      titlePadding: const EdgeInsets.only(left: 20, bottom: 16),
+                      title: const Text(
+                        'Чаты',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 28,
+                          color: Colors.white,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                      background: Stack(
+                        children: [
+                          Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: isDark
+                                    ? [
+                                        colorScheme.surfaceVariant,
+                                        colorScheme.surface,
+                                      ]
+                                    : [
+                                        colorScheme.primary,
+                                        colorScheme.primaryContainer,
+                                      ],
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            top: -50,
+                            right: -50,
+                            child: Container(
+                              width: 200,
+                              height: 200,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.white.withOpacity(0.05),
+                              ),
+                            ),
+                          ),
+                          SafeArea(
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(20, 60, 20, 0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(6),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white.withOpacity(0.2),
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                        ),
+                                        child: const Icon(
+                                          Icons.bolt,
+                                          color: Colors.white,
+                                          size: 20,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Text(
+                                        "Статистика задач",
+                                        style: TextStyle(
+                                          color: Colors.white.withOpacity(0.9),
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w500,
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 20),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: _buildStatCard(
+                                          context,
+                                          "В работе",
+                                          _tasksInProgress,
+                                          Icons.auto_mode_rounded,
+                                          Colors.orangeAccent,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: _buildStatCard(
+                                          context,
+                                          "Готово",
+                                          _tasksDone,
+                                          Icons.task_alt_rounded,
+                                          Colors.greenAccent,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: _buildStatCard(
+                                          context,
+                                          "Ожидают",
+                                          _tasksTodo,
+                                          Icons.timer_outlined,
+                                          Colors.lightBlueAccent,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
-                background: Stack(
-                  children: [
-                    Container(
+                  SliverToBoxAdapter(
+                    child: Container(
+                      height: 30,
                       decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: isDark
-                              ? [colorScheme.surfaceVariant, colorScheme.surface]
-                              : [colorScheme.primary, colorScheme.primaryContainer],
+                        color: theme.scaffoldBackgroundColor,
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(30),
                         ),
                       ),
                     ),
-                    Positioned(
-                      top: -50,
-                      right: -50,
-                      child: Container(
-                        width: 200,
-                        height: 200,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white.withOpacity(0.05),
-                        ),
-                      ),
-                    ),
-                    SafeArea(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 60, 20, 0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
+                  ),
+                  _isLoading
+                      ? const SliverFillRemaining(
+                          child: Center(child: CircularProgressIndicator()),
+                        )
+                      : _rooms.isEmpty
+                      ? SliverFillRemaining(
+                          child: Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Container(
-                                  padding: const EdgeInsets.all(6),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: const Icon(Icons.bolt, color: Colors.white, size: 20),
+                                Icon(
+                                  Icons.chat_bubble_outline_rounded,
+                                  size: 60,
+                                  color: colorScheme.outline.withOpacity(0.5),
                                 ),
-                                const SizedBox(width: 10),
+                                const SizedBox(height: 16),
                                 Text(
-                                  "Статистика задач",
+                                  "Нет доступных чатов",
                                   style: TextStyle(
-                                    color: Colors.white.withOpacity(0.9),
+                                    color: colorScheme.outline,
                                     fontSize: 16,
-                                    fontWeight: FontWeight.w500,
-                                    letterSpacing: 0.5,
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 20),
-                            Row(
-                              children: [
-                                Expanded(child: _buildStatCard(context, "В работе", _tasksInProgress, Icons.auto_mode_rounded, Colors.orangeAccent)),
-                                const SizedBox(width: 12),
-                                Expanded(child: _buildStatCard(context, "Готово", _tasksDone, Icons.task_alt_rounded, Colors.greenAccent)),
-                                const SizedBox(width: 12),
-                                Expanded(child: _buildStatCard(context, "Ожидают", _tasksTodo, Icons.timer_outlined, Colors.lightBlueAccent)),
-                              ],
-                            ),
-                          ],
+                          ),
+                        )
+                      : SliverPadding(
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          sliver: SliverList(
+                            delegate: SliverChildBuilderDelegate((
+                              context,
+                              index,
+                            ) {
+                              final room = _rooms[index];
+                              return AnimationConfiguration.staggeredList(
+                                position: index,
+                                duration: const Duration(milliseconds: 400),
+                                child: SlideAnimation(
+                                  verticalOffset: 30.0,
+                                  child: FadeInAnimation(
+                                    child: _buildRealChatTile(context, room),
+                                  ),
+                                ),
+                              );
+                            }, childCount: _rooms.length),
+                          ),
                         ),
-                      ),
-                    ),
-                  ],
-                ),
+                  const SliverToBoxAdapter(child: SizedBox(height: 100)),
+                ],
               ),
             ),
-            SliverToBoxAdapter(
-              child: Container(
-                height: 30,
-                decoration: BoxDecoration(
-                  color: theme.scaffoldBackgroundColor,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
-                ),
-              ),
-            ),
-            _isLoading
-                ? const SliverFillRemaining(child: Center(child: CircularProgressIndicator()))
-                : _rooms.isEmpty
-                ? SliverFillRemaining(
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.chat_bubble_outline_rounded, size: 60, color: colorScheme.outline.withOpacity(0.5)),
-                    const SizedBox(height: 16),
-                    Text(
-                      "Нет доступных чатов",
-                      style: TextStyle(color: colorScheme.outline, fontSize: 16),
-                    ),
-                  ],
-                ),
-              ),
-            )
-                : SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              sliver: SliverList(
-                delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                    final room = _rooms[index];
-                    return AnimationConfiguration.staggeredList(
-                      position: index,
-                      duration: const Duration(milliseconds: 400),
-                      child: SlideAnimation(
-                        verticalOffset: 30.0,
-                        child: FadeInAnimation(
-                          child: _buildRealChatTile(context, room),
-                        ),
-                      ),
-                    );
-                  },
-                  childCount: _rooms.length,
-                ),
-              ),
-            ),
-            const SliverToBoxAdapter(child: SizedBox(height: 100)),
-          ],
-        ),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _showUsersList,
@@ -409,12 +521,63 @@ class _RoomsScreenState extends State<RoomsScreen> {
         elevation: 4,
         highlightElevation: 8,
         icon: const Icon(Icons.add_comment_rounded, color: Colors.white),
-        label: const Text("Написать", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        label: const Text(
+          "Написать",
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
       ),
     );
   }
 
-  Widget _buildStatCard(BuildContext context, String title, int count, IconData icon, Color accentColor) {
+  Widget _buildConnectionBanner(ColorScheme colorScheme) {
+    return StreamBuilder<ConnectionStatus>(
+      stream: WebSocketService().connectionStatus,
+      initialData: WebSocketService().status,
+      builder: (context, snapshot) {
+        final isUp = snapshot.data == ConnectionStatus.connected;
+        return AnimatedSize(
+          duration: const Duration(milliseconds: 250),
+          child: isUp
+              ? const SizedBox(width: double.infinity)
+              : Container(
+                  width: double.infinity,
+                  color: colorScheme.errorContainer,
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: colorScheme.onErrorContainer,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Переподключение…',
+                        style: TextStyle(
+                          color: colorScheme.onErrorContainer,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+        );
+      },
+    );
+  }
+
+  Widget _buildStatCard(
+    BuildContext context,
+    String title,
+    int count,
+    IconData icon,
+    Color accentColor,
+  ) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
@@ -434,8 +597,11 @@ class _RoomsScreenState extends State<RoomsScreen> {
               Container(
                 width: 8,
                 height: 8,
-                decoration: BoxDecoration(shape: BoxShape.circle, color: accentColor.withOpacity(0.5)),
-              )
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: accentColor.withOpacity(0.5),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 12),
@@ -462,17 +628,21 @@ class _RoomsScreenState extends State<RoomsScreen> {
 
   Widget _buildRealChatTile(BuildContext context, dynamic room) {
     final colorScheme = Theme.of(context).colorScheme;
-    final String roomId = room['id']?.toString() ?? room['room_id']?.toString() ?? '';
+    final String roomId =
+        room['id']?.toString() ?? room['room_id']?.toString() ?? '';
     final String roomName = room['name'] ?? 'Чат без названия';
     final int unreadCount = room['unread_count'] ?? 0;
-    final String lastMessage = room['last_message']?.toString().isNotEmpty == true
+    final String lastMessage =
+        room['last_message']?.toString().isNotEmpty == true
         ? room['last_message'].toString()
         : "Нажмите, чтобы начать общение";
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: unreadCount > 0 ? colorScheme.primary.withOpacity(0.03) : Colors.transparent,
+        color: unreadCount > 0
+            ? colorScheme.primary.withOpacity(0.03)
+            : Colors.transparent,
         borderRadius: BorderRadius.circular(20),
       ),
       child: ListTile(
@@ -498,7 +668,9 @@ class _RoomsScreenState extends State<RoomsScreen> {
             radius: 30,
             backgroundColor: colorScheme.primaryContainer.withOpacity(0.7),
             child: Text(
-              roomName.isNotEmpty ? roomName.substring(0, 1).toUpperCase() : '?',
+              roomName.isNotEmpty
+                  ? roomName.substring(0, 1).toUpperCase()
+                  : '?',
               style: TextStyle(
                 color: colorScheme.onPrimaryContainer,
                 fontWeight: FontWeight.w800,
@@ -514,7 +686,9 @@ class _RoomsScreenState extends State<RoomsScreen> {
                 roomName,
                 style: TextStyle(
                   color: colorScheme.onSurface,
-                  fontWeight: unreadCount > 0 ? FontWeight.w900 : FontWeight.w700,
+                  fontWeight: unreadCount > 0
+                      ? FontWeight.w900
+                      : FontWeight.w700,
                   fontSize: 17,
                 ),
                 maxLines: 1,
@@ -531,7 +705,11 @@ class _RoomsScreenState extends State<RoomsScreen> {
                 ),
                 child: Text(
                   unreadCount.toString(),
-                  style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
           ],
@@ -541,7 +719,9 @@ class _RoomsScreenState extends State<RoomsScreen> {
           child: Text(
             lastMessage,
             style: TextStyle(
-              color: unreadCount > 0 ? colorScheme.onSurface : colorScheme.onSurfaceVariant.withOpacity(0.7),
+              color: unreadCount > 0
+                  ? colorScheme.onSurface
+                  : colorScheme.onSurfaceVariant.withOpacity(0.7),
               fontWeight: unreadCount > 0 ? FontWeight.w600 : FontWeight.w400,
               fontSize: 14,
             ),
@@ -549,7 +729,11 @@ class _RoomsScreenState extends State<RoomsScreen> {
             overflow: TextOverflow.ellipsis,
           ),
         ),
-        trailing: Icon(Icons.arrow_forward_ios_rounded, size: 16, color: colorScheme.outline.withOpacity(0.3)),
+        trailing: Icon(
+          Icons.arrow_forward_ios_rounded,
+          size: 16,
+          color: colorScheme.outline.withOpacity(0.3),
+        ),
       ),
     );
   }

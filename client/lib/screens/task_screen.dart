@@ -12,7 +12,8 @@ class TasksScreen extends StatefulWidget {
   State<TasksScreen> createState() => _TasksScreenState();
 }
 
-class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStateMixin {
+class _TasksScreenState extends State<TasksScreen>
+    with SingleTickerProviderStateMixin {
   final _authService = AuthService();
   late TabController _tabController;
   List<dynamic> _allTasks = [];
@@ -39,7 +40,9 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
       List<dynamic> aggregatedTasks = [];
 
       for (var room in rooms) {
-        final tasksRes = await _authService.get('/rooms/${room['id'] ?? room['room_id']}/tasks');
+        final tasksRes = await _authService.get(
+          '/rooms/${room['id'] ?? room['room_id']}/tasks',
+        );
         if (tasksRes.statusCode == 200) {
           final tasks = jsonDecode(tasksRes.body)['data'] as List? ?? [];
           aggregatedTasks.addAll(tasks);
@@ -75,11 +78,19 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: isDark ? [colorScheme.surface, colorScheme.surface] : [colorScheme.primary, colorScheme.primaryContainer],
+              colors: isDark
+                  ? [colorScheme.surface, colorScheme.surface]
+                  : [colorScheme.primary, colorScheme.primaryContainer],
             ),
           ),
         ),
-        title: Text('Моя доска', style: TextStyle(fontWeight: FontWeight.w800, color: headerForeground)),
+        title: Text(
+          'Моя доска',
+          style: TextStyle(
+            fontWeight: FontWeight.w800,
+            color: headerForeground,
+          ),
+        ),
         bottom: TabBar(
           controller: _tabController,
           labelColor: headerForeground,
@@ -114,16 +125,25 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
     if (tasks.isEmpty) {
       return LayoutBuilder(
         builder: (context, constraints) => SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+          physics: const AlwaysScrollableScrollPhysics(
+            parent: BouncingScrollPhysics(),
+          ),
           child: ConstrainedBox(
             constraints: BoxConstraints(minHeight: constraints.maxHeight),
             child: Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.inbox_rounded, size: 60, color: colorScheme.outline.withOpacity(0.5)),
+                  Icon(
+                    Icons.inbox_rounded,
+                    size: 60,
+                    color: colorScheme.outline.withOpacity(0.5),
+                  ),
                   const SizedBox(height: 16),
-                  Text('Задач пока нет', style: TextStyle(color: colorScheme.outline, fontSize: 16)),
+                  Text(
+                    'Задач пока нет',
+                    style: TextStyle(color: colorScheme.outline, fontSize: 16),
+                  ),
                 ],
               ),
             ),
@@ -132,7 +152,9 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
       );
     }
     return ListView.builder(
-      physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+      physics: const AlwaysScrollableScrollPhysics(
+        parent: BouncingScrollPhysics(),
+      ),
       padding: const EdgeInsets.all(16),
       itemCount: tasks.length,
       itemBuilder: (context, index) {
@@ -159,14 +181,15 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
     final message = CustomMessage(
       id: taskData['id'].toString(),
       authorId: taskData['created_by'] ?? '',
-      createdAt: DateTime.tryParse(taskData['created_at'] ?? '') ?? DateTime.now(),
+      createdAt:
+          DateTime.tryParse(taskData['created_at'] ?? '') ?? DateTime.now(),
       metadata: metadata,
     );
 
     return TaskCard(
       currentUserId: _currentUserId ?? '',
       message: message,
-      onAccept: (id) async {
+      onAccept: (id) => _runTaskAction(() async {
         // Та же логика "принятия обеими сторонами", что и в чате: статус
         // становится in_progress только когда accepted_by содержит обоих
         // участников, иначе задача остаётся в ожидании напарника.
@@ -178,17 +201,14 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
           acceptedBy.add(_currentUserId!);
         }
         final newStatus = acceptedBy.length >= 2 ? 'in_progress' : 'todo';
-        await _authService.patch('/tasks/$id', {'status': newStatus, 'accepted_by': acceptedBy});
-        _fetchAllTasks();
-      },
-      onStatusChange: (id, s) async {
-        await _authService.patch('/tasks/$id', {'status': s});
-        _fetchAllTasks();
-      },
-      onDelete: (id) async {
-        await _authService.delete('/tasks/$id');
-        _fetchAllTasks();
-      },
+        await _authService.patch('/tasks/$id', {
+          'status': newStatus,
+          'accepted_by': acceptedBy,
+        });
+      }),
+      onStatusChange: (id, s) =>
+          _runTaskAction(() => _authService.patch('/tasks/$id', {'status': s})),
+      onDelete: (id) => _runTaskAction(() => _authService.delete('/tasks/$id')),
       onEdit: (id) async {
         // Переиспользуем TaskPanel как в чате через шторку
         // Чтобы не ломать API, шлем только измененные поля
@@ -206,25 +226,46 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
                 _fetchAllTasks();
               } catch (e) {
                 debugPrint('edit task in TasksScreen error: $e');
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Не удалось сохранить изменения'),
+                    ),
+                  );
+                }
               }
             },
           ),
         );
       },
-      onSubtasksUpdated: (taskId, updatedSubtasks) async {
-        try {
-          // Отправляем полный набор полей задачи (как в чате), а не только
-          // subtasks: PATCH /tasks/:id трактует такой запрос как полное
-          // обновление и иначе перезаписал бы остальные поля (например
-          // due_date) пустыми значениями.
-          final payload = Map<String, dynamic>.from(metadata);
-          payload['subtasks'] = updatedSubtasks;
-          await _authService.patch('/tasks/$taskId', payload);
-          _fetchAllTasks();
-        } catch (e) {
-          debugPrint('Error updating subtasks in task_screen: $e');
-        }
-      },
+      onSubtasksUpdated: (taskId, updatedSubtasks) => _runTaskAction(() {
+        // Отправляем полный набор полей задачи (как в чате), а не только
+        // subtasks: PATCH /tasks/:id трактует такой запрос как полное
+        // обновление и иначе перезаписал бы остальные поля (например
+        // due_date) пустыми значениями.
+        final payload = Map<String, dynamic>.from(metadata);
+        payload['subtasks'] = updatedSubtasks;
+        return _authService.patch('/tasks/$taskId', payload);
+      }),
     );
+  }
+
+  /// Выполняет действие над задачей, обновляет список при успехе и
+  /// показывает snackbar при ошибке вместо того, чтобы падение запроса
+  /// прошло совсем незамеченным.
+  Future<void> _runTaskAction(Future<void> Function() action) async {
+    try {
+      await action();
+      _fetchAllTasks();
+    } catch (e) {
+      debugPrint('Task action error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Не удалось выполнить действие с задачей'),
+          ),
+        );
+      }
+    }
   }
 }
