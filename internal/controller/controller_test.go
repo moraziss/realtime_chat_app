@@ -53,7 +53,7 @@ func (f *fakeUsers) SaveVerificationCode(email, code string, expiresAt time.Time
 	return nil
 }
 func (f *fakeUsers) CheckVerificationCode(email, code string) (bool, error) { return false, nil }
-func (f *fakeUsers) DeleteVerificationCode(email string) error             { return nil }
+func (f *fakeUsers) DeleteVerificationCode(email string) error              { return nil }
 
 type fakeRefreshTokens struct {
 	byHash map[string]*entity.RefreshToken
@@ -75,7 +75,7 @@ func (f *fakeRefreshTokens) GetRefreshTokenByHash(hash string) (*entity.RefreshT
 	}
 	return t, nil
 }
-func (f *fakeRefreshTokens) RevokeRefreshToken(id string) error                  { return nil }
+func (f *fakeRefreshTokens) RevokeRefreshToken(id string) error                { return nil }
 func (f *fakeRefreshTokens) RevokeAllRefreshTokensForUser(userID string) error { return nil }
 
 func testSigner() token.Signer {

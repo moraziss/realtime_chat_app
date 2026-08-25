@@ -36,15 +36,15 @@ func (f *fakeRepo) AcceptTask(taskID, userID string) (*entity.TaskMetadata, erro
 // fakeUsers is a minimal repository.User - ServeWS only calls GetUser.
 type fakeUsers struct{}
 
-func (fakeUsers) CreateUser(*entity.User) error                          { return nil }
-func (fakeUsers) UpdateUser(*entity.User) error                          { return nil }
-func (fakeUsers) DeleteUser(string) error                                { return nil }
-func (fakeUsers) GetUser(id string) (*entity.User, error)                { return &entity.User{ID: id}, nil }
-func (fakeUsers) GetUserByEmail(string) (entity.User, error)             { return entity.User{}, nil }
-func (fakeUsers) GetUsers(string) ([]entity.User, error)                 { return nil, nil }
-func (fakeUsers) SaveVerificationCode(string, string, time.Time) error   { return nil }
-func (fakeUsers) CheckVerificationCode(string, string) (bool, error)     { return false, nil }
-func (fakeUsers) DeleteVerificationCode(string) error                    { return nil }
+func (fakeUsers) CreateUser(*entity.User) error                        { return nil }
+func (fakeUsers) UpdateUser(*entity.User) error                        { return nil }
+func (fakeUsers) DeleteUser(string) error                              { return nil }
+func (fakeUsers) GetUser(id string) (*entity.User, error)              { return &entity.User{ID: id}, nil }
+func (fakeUsers) GetUserByEmail(string) (entity.User, error)           { return entity.User{}, nil }
+func (fakeUsers) GetUsers(string) ([]entity.User, error)               { return nil, nil }
+func (fakeUsers) SaveVerificationCode(string, string, time.Time) error { return nil }
+func (fakeUsers) CheckVerificationCode(string, string) (bool, error)   { return false, nil }
+func (fakeUsers) DeleteVerificationCode(string) error                  { return nil }
 
 func TestServeWSJoinBroadcastsPresenceToSelf(t *testing.T) {
 	repo := &fakeRepo{roomsByUser: map[string][]entity.UserRoom{

@@ -32,7 +32,7 @@ func (s *gmailSender) SendVerificationCode(toEmail, code string) error {
 	}
 
 	subject := "Подтверждение регистрации в мессенджере!"
-	
+
 	// Правильное формирование заголовков письма
 	header := make(map[string]string)
 	header["From"] = s.user
@@ -58,10 +58,10 @@ func (s *gmailSender) SendVerificationCode(toEmail, code string) error {
 	`, code)
 
 	msg := []byte(message + "\r\n" + body)
-	
+
 	auth := smtp.PlainAuth("", s.user, s.password, s.host)
 	addr := fmt.Sprintf("%s:%s", s.host, s.port)
-	
+
 	err := smtp.SendMail(addr, auth, s.user, []string{toEmail}, msg)
 	if err != nil {
 		return fmt.Errorf("ошибка отправки письма: %v", err)

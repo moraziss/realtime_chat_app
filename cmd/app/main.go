@@ -34,12 +34,12 @@ import (
 // (тот же origin, что и остальное приложение). Остальные типы (фото,
 // видео, документы) по-прежнему принимаются без изменений.
 var dangerousUploadExt = map[string]bool{
-	".html": true,
-	".htm":  true,
+	".html":  true,
+	".htm":   true,
 	".xhtml": true,
-	".svg":  true,
-	".js":   true,
-	".mjs":  true,
+	".svg":   true,
+	".js":    true,
+	".mjs":   true,
 }
 
 // withCORS оборачивает весь роутер, а не отдельные маршруты: preflight-запрос
