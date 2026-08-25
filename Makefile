@@ -20,7 +20,8 @@ tidy:
 	go mod tidy
 
 test:
-	go test ./...
+	go vet ./...
+	go test ./... -race -cover
 
 psql:
 	docker exec -it real-time-chat-db-1 psql -U ${DB_USER} -d ${DB_NAME}
