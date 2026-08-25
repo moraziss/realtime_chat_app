@@ -6,7 +6,8 @@ import '../config.dart';
 import 'package:flutter/foundation.dart';
 
 class AuthService {
-  static const _legacyTokenKey = 'auth_token'; // старое место хранения (SharedPreferences), только для миграции
+  static const _legacyTokenKey =
+      'auth_token'; // старое место хранения (SharedPreferences), только для миграции
   static const _accessTokenKey = 'auth_access_token';
   static const _refreshTokenKey = 'auth_refresh_token';
   static const _userIdKey = 'user_id';
@@ -14,7 +15,16 @@ class AuthService {
 
   static const _timeout = Duration(seconds: 10);
 
-  static const _secureStorage = FlutterSecureStorage();
+  final http.Client _client;
+  final FlutterSecureStorage _secureStorage;
+
+  // http.Client/FlutterSecureStorage внедряются через конструктор
+  // исключительно ради тестов (mocktail может подменить обе зависимости);
+  // в проде оба параметра всегда опускаются и используются реальные
+  // реализации, как и раньше.
+  AuthService({http.Client? client, FlutterSecureStorage? secureStorage})
+    : _client = client ?? http.Client(),
+      _secureStorage = secureStorage ?? const FlutterSecureStorage();
 
   // Кэш текущей личности в памяти процесса. На desktop (Windows/Linux/macOS)
   // shared_preferences хранится в одном файле на диске, привязанном к
@@ -33,6 +43,17 @@ class AuthService {
   // обменов refresh-токена — все они дожидаются одного и того же Future.
   static Future<bool>? _refreshInFlight;
 
+  /// Сбрасывает статический in-memory кэш между тестами — без этого кэш,
+  /// намеренно живущий на уровне процесса в проде (см. комментарий выше),
+  /// протекал бы из одного теста в другой.
+  @visibleForTesting
+  static void resetCacheForTesting() {
+    _cachedToken = null;
+    _cachedUserId = null;
+    _cachedUserEmail = null;
+    _refreshInFlight = null;
+  }
+
   // Вспомогательная функция для генерации уникального ключа для каждого пользователя
   Future<String> _getPrefKey(String baseKey) async {
     final uid = await getUserId() ?? 'guest';
@@ -40,11 +61,16 @@ class AuthService {
   }
 
   // Сохранение данных профиля в локальный кеш (индивидуально для юзера)
-  Future<void> saveProfileLocally({String? name, String? bio, String? avatar}) async {
+  Future<void> saveProfileLocally({
+    String? name,
+    String? bio,
+    String? avatar,
+  }) async {
     final prefs = await SharedPreferences.getInstance();
     if (name != null) await prefs.setString(await _getPrefKey('name'), name);
     if (bio != null) await prefs.setString(await _getPrefKey('bio'), bio);
-    if (avatar != null) await prefs.setString(await _getPrefKey('avatar'), avatar);
+    if (avatar != null)
+      await prefs.setString(await _getPrefKey('avatar'), avatar);
   }
 
   // Получение данных профиля из локального кеша
@@ -59,11 +85,13 @@ class AuthService {
 
   Future<bool> sendVerificationCode(String email) async {
     try {
-      final res = await http.post(
-        Uri.parse('${AppConfig.apiUrl}/register/send-code'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'email': email}),
-      ).timeout(_timeout);
+      final res = await _client
+          .post(
+            Uri.parse('${AppConfig.apiUrl}/register/send-code'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'email': email}),
+          )
+          .timeout(_timeout);
 
       if (res.statusCode == 200 || res.statusCode == 201) {
         return true;
@@ -71,7 +99,11 @@ class AuthService {
         String errorMsg = 'Ошибка сервера';
         try {
           final data = jsonDecode(res.body);
-          errorMsg = data['error']?['message'] ?? data['error'] ?? data['message'] ?? res.body;
+          errorMsg =
+              data['error']?['message'] ??
+              data['error'] ??
+              data['message'] ??
+              res.body;
         } catch (_) {
           errorMsg = res.body;
         }
@@ -83,19 +115,26 @@ class AuthService {
     }
   }
 
-  Future<bool> register(String name, String email, String password, String code) async {
+  Future<bool> register(
+    String name,
+    String email,
+    String password,
+    String code,
+  ) async {
     try {
-      final res = await http.post(
-        Uri.parse('${AppConfig.apiUrl}/register'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'name': name,
-          'email': email,
-          'confirm_email': email,
-          'password': password,
-          'code': code,
-        }),
-      ).timeout(_timeout);
+      final res = await _client
+          .post(
+            Uri.parse('${AppConfig.apiUrl}/register'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'name': name,
+              'email': email,
+              'confirm_email': email,
+              'password': password,
+              'code': code,
+            }),
+          )
+          .timeout(_timeout);
 
       if (res.statusCode == 200 || res.statusCode == 201) {
         final data = jsonDecode(res.body);
@@ -105,7 +144,11 @@ class AuthService {
         String errorMsg = 'Ошибка регистрации';
         try {
           final data = jsonDecode(res.body);
-          errorMsg = data['error']?['message'] ?? data['error'] ?? data['message'] ?? res.body;
+          errorMsg =
+              data['error']?['message'] ??
+              data['error'] ??
+              data['message'] ??
+              res.body;
         } catch (_) {
           errorMsg = res.body;
         }
@@ -118,11 +161,13 @@ class AuthService {
   }
 
   Future<bool> login(String email, String password) async {
-    final res = await http.post(
-      Uri.parse('${AppConfig.apiUrl}/login'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'email': email, 'password': password}),
-    ).timeout(_timeout);
+    final res = await _client
+        .post(
+          Uri.parse('${AppConfig.apiUrl}/login'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'email': email, 'password': password}),
+        )
+        .timeout(_timeout);
 
     if (res.statusCode == 200) {
       final data = jsonDecode(res.body);
@@ -148,7 +193,9 @@ class AuthService {
     final parts = accessToken.split('.');
     if (parts.length == 3) {
       try {
-        final payload = jsonDecode(utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))));
+        final payload = jsonDecode(
+          utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
+        );
         final userId = payload['sub']?.toString();
         if (userId != null) {
           final prefs = await SharedPreferences.getInstance();
@@ -163,10 +210,14 @@ class AuthService {
     final parts = accessToken.split('.');
     if (parts.length != 3) return true;
     try {
-      final payload = jsonDecode(utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))));
+      final payload = jsonDecode(
+        utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
+      );
       final exp = payload['exp'];
       if (exp is! int) return false;
-      return DateTime.now().isAfter(DateTime.fromMillisecondsSinceEpoch(exp * 1000));
+      return DateTime.now().isAfter(
+        DateTime.fromMillisecondsSinceEpoch(exp * 1000),
+      );
     } catch (_) {
       return true;
     }
@@ -177,7 +228,9 @@ class AuthService {
   /// и тот же в процессе идущий обмен вместо того, чтобы гонять несколько
   /// одновременных /auth/refresh (что привело бы к лишним ротациям и гонке).
   Future<bool> _refreshTokens() {
-    return _refreshInFlight ??= _doRefresh().whenComplete(() => _refreshInFlight = null);
+    return _refreshInFlight ??= _doRefresh().whenComplete(
+      () => _refreshInFlight = null,
+    );
   }
 
   Future<bool> _doRefresh() async {
@@ -185,11 +238,13 @@ class AuthService {
     if (refreshToken == null) return false;
 
     try {
-      final res = await http.post(
-        Uri.parse('${AppConfig.apiUrl}/auth/refresh'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'refresh_token': refreshToken}),
-      ).timeout(_timeout);
+      final res = await _client
+          .post(
+            Uri.parse('${AppConfig.apiUrl}/auth/refresh'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'refresh_token': refreshToken}),
+          )
+          .timeout(_timeout);
 
       if (res.statusCode != 200) return false;
 
@@ -223,45 +278,70 @@ class AuthService {
   }
 
   Future<http.Response> get(String path) {
-    return _withAuthRetry((token) => http
-        .get(Uri.parse('${AppConfig.apiUrl}$path'), headers: {'Authorization': 'Bearer $token'})
-        .timeout(_timeout));
+    return _withAuthRetry(
+      (token) => _client
+          .get(
+            Uri.parse('${AppConfig.apiUrl}$path'),
+            headers: {'Authorization': 'Bearer $token'},
+          )
+          .timeout(_timeout),
+    );
   }
 
   Future<http.Response> post(String endpoint, Map<String, dynamic> body) {
-    return _withAuthRetry((token) => http
-        .post(
-          Uri.parse('${AppConfig.apiUrl}$endpoint'),
-          headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
-          body: jsonEncode(body),
-        )
-        .timeout(_timeout));
+    return _withAuthRetry(
+      (token) => _client
+          .post(
+            Uri.parse('${AppConfig.apiUrl}$endpoint'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+            body: jsonEncode(body),
+          )
+          .timeout(_timeout),
+    );
   }
 
   Future<http.Response> patch(String path, Map<String, dynamic> body) {
-    return _withAuthRetry((token) => http
-        .patch(
-          Uri.parse('${AppConfig.apiUrl}$path'),
-          headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
-          body: jsonEncode(body),
-        )
-        .timeout(_timeout));
+    return _withAuthRetry(
+      (token) => _client
+          .patch(
+            Uri.parse('${AppConfig.apiUrl}$path'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+            body: jsonEncode(body),
+          )
+          .timeout(_timeout),
+    );
   }
 
   Future<http.Response> put(String path, Map<String, dynamic> body) {
-    return _withAuthRetry((token) => http
-        .put(
-          Uri.parse('${AppConfig.apiUrl}$path'),
-          headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
-          body: jsonEncode(body),
-        )
-        .timeout(_timeout));
+    return _withAuthRetry(
+      (token) => _client
+          .put(
+            Uri.parse('${AppConfig.apiUrl}$path'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+            body: jsonEncode(body),
+          )
+          .timeout(_timeout),
+    );
   }
 
   Future<http.Response> delete(String path) {
-    return _withAuthRetry((token) => http
-        .delete(Uri.parse('${AppConfig.apiUrl}$path'), headers: {'Authorization': 'Bearer $token'})
-        .timeout(_timeout));
+    return _withAuthRetry(
+      (token) => _client
+          .delete(
+            Uri.parse('${AppConfig.apiUrl}$path'),
+            headers: {'Authorization': 'Bearer $token'},
+          )
+          .timeout(_timeout),
+    );
   }
 
   String get currentBaseUrl => AppConfig.apiUrl;
@@ -272,10 +352,15 @@ class AuthService {
   Future<String?> uploadFile(Uint8List bytes, String fileName) async {
     try {
       final res = await _withAuthRetry((token) async {
-        var request = http.MultipartRequest('POST', Uri.parse('${AppConfig.apiUrl}/upload'));
+        var request = http.MultipartRequest(
+          'POST',
+          Uri.parse('${AppConfig.apiUrl}/upload'),
+        );
         request.headers['Authorization'] = 'Bearer $token';
-        request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: fileName));
-        final streamedResponse = await request.send().timeout(_timeout);
+        request.files.add(
+          http.MultipartFile.fromBytes('file', bytes, filename: fileName),
+        );
+        final streamedResponse = await _client.send(request).timeout(_timeout);
         return http.Response.fromStream(streamedResponse);
       });
       if (res.statusCode == 200 || res.statusCode == 201) {
@@ -326,7 +411,7 @@ class AuthService {
     final refreshToken = await _secureStorage.read(key: _refreshTokenKey);
     if (refreshToken != null) {
       try {
-        await http
+        await _client
             .post(
               Uri.parse('${AppConfig.apiUrl}/auth/logout'),
               headers: {'Content-Type': 'application/json'},
@@ -334,7 +419,9 @@ class AuthService {
             )
             .timeout(_timeout);
       } catch (e) {
-        debugPrint('Logout request error (ignoring, logging out locally anyway): $e');
+        debugPrint(
+          'Logout request error (ignoring, logging out locally anyway): $e',
+        );
       }
     }
 
@@ -390,7 +477,8 @@ class AuthService {
       if (res.statusCode == 200) {
         final users = jsonDecode(res.body)['data'] as List? ?? [];
         for (final u in users) {
-          _users[u['id'].toString()] = u['name'] ?? u['email'] ?? u['id'].toString();
+          _users[u['id'].toString()] =
+              u['name'] ?? u['email'] ?? u['id'].toString();
         }
       }
     } catch (_) {}
