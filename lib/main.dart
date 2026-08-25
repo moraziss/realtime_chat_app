@@ -10,6 +10,7 @@ import 'screens/chat_screen.dart';
 import 'providers/theme_provider.dart';
 import 'services/auth_service.dart';
 import 'theme_notifier.dart';
+import 'theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -65,48 +66,25 @@ class MessengerApp extends StatelessWidget {
         return ValueListenableBuilder<double>(
           valueListenable: appFontSizeNotifier,
           builder: (context, fontSizeFactor, _) {
-            final lightScheme = ColorScheme.fromSeed(seedColor: color, brightness: Brightness.light);
-            final darkScheme = ColorScheme.fromSeed(seedColor: color, brightness: Brightness.dark);
-
             return MaterialApp.router(
               title: 'Мессенджер',
               debugShowCheckedModeBanner: false,
               themeMode: themeProvider.themeMode,
-              theme: ThemeData(
-                colorScheme: lightScheme,
-                useMaterial3: true,
-                textTheme: _applyFontSize(ThemeData.light().textTheme, fontSizeFactor),
+              theme: AppTheme.build(
+                seedColor: color,
+                brightness: Brightness.light,
+                fontScale: fontSizeFactor,
               ),
-              darkTheme: ThemeData(
-                colorScheme: darkScheme,
-                useMaterial3: true,
-                textTheme: _applyFontSize(ThemeData.dark().textTheme, fontSizeFactor),
+              darkTheme: AppTheme.build(
+                seedColor: color,
+                brightness: Brightness.dark,
+                fontScale: fontSizeFactor,
               ),
               routerConfig: _router,
             );
           },
         );
       },
-    );
-  }
-
-  TextTheme _applyFontSize(TextTheme base, double factor) {
-    return base.copyWith(
-      displayLarge: base.displayLarge?.copyWith(fontSize: (base.displayLarge?.fontSize ?? 57) * factor),
-      displayMedium: base.displayMedium?.copyWith(fontSize: (base.displayMedium?.fontSize ?? 45) * factor),
-      displaySmall: base.displaySmall?.copyWith(fontSize: (base.displaySmall?.fontSize ?? 36) * factor),
-      headlineLarge: base.headlineLarge?.copyWith(fontSize: (base.headlineLarge?.fontSize ?? 32) * factor),
-      headlineMedium: base.headlineMedium?.copyWith(fontSize: (base.headlineMedium?.fontSize ?? 28) * factor),
-      headlineSmall: base.headlineSmall?.copyWith(fontSize: (base.headlineSmall?.fontSize ?? 24) * factor),
-      titleLarge: base.titleLarge?.copyWith(fontSize: (base.titleLarge?.fontSize ?? 22) * factor),
-      titleMedium: base.titleMedium?.copyWith(fontSize: (base.titleMedium?.fontSize ?? 16) * factor),
-      titleSmall: base.titleSmall?.copyWith(fontSize: (base.titleSmall?.fontSize ?? 14) * factor),
-      bodyLarge: base.bodyLarge?.copyWith(fontSize: (base.bodyLarge?.fontSize ?? 16) * factor),
-      bodyMedium: base.bodyMedium?.copyWith(fontSize: (base.bodyMedium?.fontSize ?? 14) * factor),
-      bodySmall: base.bodySmall?.copyWith(fontSize: (base.bodySmall?.fontSize ?? 12) * factor),
-      labelLarge: base.labelLarge?.copyWith(fontSize: (base.labelLarge?.fontSize ?? 14) * factor),
-      labelMedium: base.labelMedium?.copyWith(fontSize: (base.labelMedium?.fontSize ?? 12) * factor),
-      labelSmall: base.labelSmall?.copyWith(fontSize: (base.labelSmall?.fontSize ?? 11) * factor),
     );
   }
 }
