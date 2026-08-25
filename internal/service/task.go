@@ -197,9 +197,25 @@ func NewUpdateTaskService(repo repository.Task, chatHub *ws.Chat, rooms interfac
 		}
 
 		if req.Title == "" && req.Priority == "" && req.Status != "" {
-			err := repo.UpdateTaskStatus(req.ID, req.Status, req.AcceptedBy)
-			if err != nil {
-				return nil, apperr.Internal(err)
+			finalStatus := req.Status
+
+			if len(req.AcceptedBy) > 0 {
+				// "Принятие" задачи: сервер сам решает итоговый accepted_by
+				// (только добавляя ТЕКУЩЕГО авторизованного пользователя) и
+				// статус (>=2 принявших -> in_progress), а не доверяет
+				// списку/статусу, присланному клиентом — иначе PATCH-запрос
+				// напрямую (не через UI) мог бы добавить в accepted_by
+				// чужой userID или сразу выставить in_progress в одиночку,
+				// обходя "рукопожатие обеими сторонами".
+				meta, err := repo.AcceptTask(req.ID, userID)
+				if err != nil {
+					return nil, apperr.Internal(err)
+				}
+				finalStatus = meta.Status
+			} else {
+				if err := repo.UpdateTaskStatus(req.ID, req.Status, nil); err != nil {
+					return nil, apperr.Internal(err)
+				}
 			}
 
 			// Рассылаем уведомление об обновлении статуса через WebSocket
@@ -208,14 +224,14 @@ func NewUpdateTaskService(repo repository.Task, chatHub *ws.Chat, rooms interfac
 			// а фронтенд сам поймет, что нужно обновить.
 			statusMetadata, _ := json.Marshal(map[string]string{
 				"task_id": req.ID,
-				"status":  req.Status,
+				"status":  finalStatus,
 			})
 			chatHub.Broadcast(ws.Message{
 				Type:     "task_updated",
 				Metadata: statusMetadata,
 			})
 
-			return &UpdateTaskResponse{Data: entity.Task{ID: req.ID, Status: req.Status}}, nil
+			return &UpdateTaskResponse{Data: entity.Task{ID: req.ID, Status: finalStatus}}, nil
 		}
 
 		parsedDueDate := parseFlexibleTime(req.DueDate)

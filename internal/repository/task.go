@@ -13,4 +13,5 @@ type Task interface {
 	DeleteTask(id string) error
 	GetUserTaskStats(userID string) (*entity.TaskStats, error)
 	CreateTaskWithMessage(task *entity.Task) (string, string, error)
+	AcceptTask(taskID, userID string) (*entity.TaskMetadata, error)
 }
