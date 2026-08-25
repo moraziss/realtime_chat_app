@@ -260,8 +260,10 @@ func main() {
 	srv := &http.Server{
 		Addr:         addr,
 		Handler:      withCORS(cfg.AllowedOrigins)(logging.WithRequestID(withRecover(router))),
-		WriteTimeout: 15 * time.Second,
-		ReadTimeout:  15 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		ReadHeaderTimeout: 5 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 
 	quit := make(chan os.Signal, 1)
