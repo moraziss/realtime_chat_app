@@ -82,3 +82,18 @@ CREATE TABLE IF NOT EXISTS verification_codes (
     expires_at TIMESTAMP NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Refresh-токены: хранится только SHA-256 хэш самого токена (64 hex-символа),
+-- а не токен целиком — утечка таблицы не даёт восстановить действующие
+-- токены. revoked_at ставится при ротации (см. /auth/refresh) и при логауте.
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+    id         UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash VARCHAR(64) NOT NULL UNIQUE,
+    expires_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    revoked_at TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens (user_id);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_hash ON refresh_tokens (token_hash);

@@ -125,8 +125,10 @@ func main() {
 
 	// --- Auth сервисы ---
 	postAuthorizeService := service.NewAuthorizeService(db)
-	postLoginService := service.NewLoginService(db, signer)
-	postRegisterService := service.NewRegisterService(db, signer)
+	postLoginService := service.NewLoginService(db, db, signer, cfg.RefreshTTL)
+	postRegisterService := service.NewRegisterService(db, db, signer, cfg.RefreshTTL)
+	postRefreshService := service.NewRefreshService(db, signer, cfg.RefreshTTL)
+	postLogoutService := service.NewLogoutService(db)
 
 	// Почта и сервис отправки кода
 	emailSender := service.NewEmailSender(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUser, cfg.SMTPPassword)
@@ -172,6 +174,8 @@ func main() {
 	router.POST("/register/send-code", ctl.PostSendCode(sendCodeService))
 	router.POST("/register", ctl.PostRegister(postRegisterService))
 	router.POST("/login", ctl.PostLogin(postLoginService))
+	router.POST("/auth/refresh", ctl.PostRefresh(postRefreshService))
+	router.POST("/auth/logout", ctl.PostLogout(postLogoutService))
 
 	// Пользователи
 	router.GET("/users", authorized(ctl.GetUsers(getUsersService)))

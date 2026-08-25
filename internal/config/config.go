@@ -64,10 +64,11 @@ func Load() (*Config, error) {
 		AllowedOrigins: ParseAllowedOrigins(os.Getenv("ALLOWED_ORIGINS")),
 	}
 
-	// AccessTTL по умолчанию сохраняет текущее поведение (24ч, единственный
-	// токен без обновления). Уменьшается до короткоживущего значения там, где
-	// вводятся refresh-токены — см. соответствующий коммит.
-	cfg.AccessTTL = parseDurationDefault("ACCESS_TOKEN_TTL", 24*time.Hour)
+	// Access-токен короткоживущий: если он украден (например, из логов или
+	// прокси), окно эксплуатации маленькое. Долгая сессия поддерживается
+	// refresh-токеном, который хранится только в виде хэша и может быть
+	// отозван (см. internal/service/refresh.go).
+	cfg.AccessTTL = parseDurationDefault("ACCESS_TOKEN_TTL", 30*time.Minute)
 	cfg.RefreshTTL = parseDurationDefault("REFRESH_TOKEN_TTL", 30*24*time.Hour)
 
 	if err := cfg.validate(); err != nil {

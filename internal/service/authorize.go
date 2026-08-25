@@ -80,6 +80,31 @@ func NewAuthorizeService(repo repository.User) Authorize {
 	}
 }
 
+// issueTokenPair подписывает access-токен и создаёт+сохраняет новый
+// refresh-токен для пользователя. Общая логика для Login и Register, чтобы
+// оба метода входа выдавали одинаковую пару токенов одинаковым способом.
+func issueTokenPair(ctx context.Context, refreshRepo repository.RefreshToken, signer token.Signer, refreshTTL time.Duration, userID string) (accessToken, refreshToken string, expiresIn int64, err error) {
+	accessToken, err = signer.Sign(userID)
+	if err != nil {
+		return "", "", 0, apperr.Internal(err)
+	}
+
+	plain, hash, err := token.GenerateRefreshToken()
+	if err != nil {
+		return "", "", 0, apperr.Internal(err)
+	}
+	if err := refreshRepo.CreateRefreshToken(&entity.RefreshToken{
+		UserID:    userID,
+		TokenHash: hash,
+		ExpiresAt: time.Now().Add(refreshTTL),
+	}); err != nil {
+		logging.FromContext(ctx).Error("failed to persist refresh token", "err", err)
+		return "", "", 0, apperr.Internal(err)
+	}
+
+	return accessToken, plain, signer.ExpiresIn(), nil
+}
+
 // --- РЕГИСТРАЦИЯ ---
 
 type RegisterRequest struct {
@@ -110,12 +135,14 @@ func (r *RegisterRequest) Validate() error {
 }
 
 type RegisterResponse struct {
-	AccessToken string `json:"access_token"`
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+	ExpiresIn    int64  `json:"expires_in"`
 }
 
 type Register func(ctx context.Context, req RegisterRequest) (*RegisterResponse, error)
 
-func NewRegisterService(repo repository.User, signer token.Signer) Register {
+func NewRegisterService(repo repository.User, refreshRepo repository.RefreshToken, signer token.Signer, refreshTTL time.Duration) Register {
 	return func(ctx context.Context, req RegisterRequest) (*RegisterResponse, error) {
 		if err := req.Validate(); err != nil {
 			return nil, err
@@ -150,12 +177,14 @@ func NewRegisterService(repo repository.User, signer token.Signer) Register {
 		// 4. Удаляем использованный код
 		_ = repo.DeleteVerificationCode(req.Email)
 
-		token, err := signer.Sign(user.ID)
+		accessToken, refreshToken, expiresIn, err := issueTokenPair(ctx, refreshRepo, signer, refreshTTL, user.ID)
 		if err != nil {
-			return nil, apperr.Internal(err)
+			return nil, err
 		}
 		return &RegisterResponse{
-			AccessToken: token,
+			AccessToken:  accessToken,
+			RefreshToken: refreshToken,
+			ExpiresIn:    expiresIn,
 		}, nil
 	}
 }
@@ -168,13 +197,14 @@ type LoginRequest struct {
 }
 
 type LoginResponse struct {
-	AccessToken string `json:"access_token"`
-	ExpiresIn   int64  `json:"expires_in"`
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+	ExpiresIn    int64  `json:"expires_in"`
 }
 
 type Login func(ctx context.Context, req LoginRequest) (*LoginResponse, error)
 
-func NewLoginService(repo repository.User, signer token.Signer) Login {
+func NewLoginService(repo repository.User, refreshRepo repository.RefreshToken, signer token.Signer, refreshTTL time.Duration) Login {
 	return func(ctx context.Context, req LoginRequest) (*LoginResponse, error) {
 		email := strings.ToLower(strings.TrimSpace(req.Email))
 		user, err := repo.GetUserByEmail(email)
@@ -184,13 +214,15 @@ func NewLoginService(repo repository.User, signer token.Signer) Login {
 		if err := user.ComparePassword(req.Password); err != nil {
 			return nil, apperr.Unauthorized("неверный email или пароль")
 		}
-		accessToken, err := signer.Sign(user.ID)
+
+		accessToken, refreshToken, expiresIn, err := issueTokenPair(ctx, refreshRepo, signer, refreshTTL, user.ID)
 		if err != nil {
-			return nil, apperr.Internal(err)
+			return nil, err
 		}
 		return &LoginResponse{
-			AccessToken: accessToken,
-			ExpiresIn:   signer.ExpiresIn(),
+			AccessToken:  accessToken,
+			RefreshToken: refreshToken,
+			ExpiresIn:    expiresIn,
 		}, nil
 	}
 }

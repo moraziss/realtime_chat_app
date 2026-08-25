@@ -78,6 +78,40 @@ func (c *Controller) PostRegister(svc service.Register) httprouter.Handle {
 	}
 }
 
+func (c *Controller) PostRefresh(svc service.Refresh) httprouter.Handle {
+	return func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+		var req service.RefreshRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			apperr.WriteError(w, r, apperr.Validation("invalid request body"))
+			return
+		}
+		res, err := svc(r.Context(), req)
+		if err != nil {
+			apperr.WriteError(w, r, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(res)
+	}
+}
+
+func (c *Controller) PostLogout(svc service.Logout) httprouter.Handle {
+	return func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+		var req service.LogoutRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			apperr.WriteError(w, r, apperr.Validation("invalid request body"))
+			return
+		}
+		res, err := svc(r.Context(), req)
+		if err != nil {
+			apperr.WriteError(w, r, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(res)
+	}
+}
+
 func (c *Controller) PostSendCode(svc service.SendCode) httprouter.Handle {
 	return func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 		var req service.SendCodeRequest
