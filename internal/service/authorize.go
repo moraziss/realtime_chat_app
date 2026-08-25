@@ -69,7 +69,10 @@ type Authorize func(ctx context.Context, req AuthorizeRequest) (*AuthorizeRespon
 
 func NewAuthorizeService(repo repository.User) Authorize {
 	return func(ctx context.Context, req AuthorizeRequest) (*AuthorizeResponse, error) {
-		userID := ctx.Value(entity.ContextKeyUserID).(string)
+		userID, ok := ctx.Value(entity.ContextKeyUserID).(string)
+		if !ok || userID == "" {
+			return nil, apperr.Unauthorized("не авторизован")
+		}
 		user, err := repo.GetUser(userID)
 		if err != nil {
 			return nil, err
