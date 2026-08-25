@@ -115,38 +115,57 @@ class _TaskPanelState extends State<TaskPanel> {
   @override
   Widget build(BuildContext context) {
     final isEditing = widget.initialData != null;
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Padding(
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
-        left: 16, right: 16, top: 24,
+        left: 16, right: 16, top: 12,
       ),
       child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(isEditing ? 'Редактировать задачу' : 'Новая задача', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 16),
+            Center(
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                width: 40,
+                height: 5,
+                decoration: BoxDecoration(color: Colors.grey.withOpacity(0.3), borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: colorScheme.primary.withOpacity(0.12), borderRadius: BorderRadius.circular(12)),
+                  child: Icon(isEditing ? Icons.edit_rounded : Icons.add_task_rounded, color: colorScheme.primary),
+                ),
+                const SizedBox(width: 12),
+                Text(isEditing ? 'Редактировать задачу' : 'Новая задача', style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
+              ],
+            ),
+            const SizedBox(height: 20),
             TextField(
               controller: _titleController,
-              decoration: const InputDecoration(labelText: 'Название задачи', border: OutlineInputBorder()),
+              decoration: const InputDecoration(labelText: 'Название задачи', prefixIcon: Icon(Icons.title_rounded)),
               autofocus: !isEditing,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
             TextField(
               controller: _descController,
-              decoration: const InputDecoration(labelText: 'Описание (необязательно)', border: OutlineInputBorder()),
+              decoration: const InputDecoration(labelText: 'Описание (необязательно)', prefixIcon: Icon(Icons.notes_rounded)),
               maxLines: 2,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
 
             Row(
               children: [
                 Expanded(
                   child: DropdownButtonFormField<String>(
                     value: _priority,
-                    decoration: const InputDecoration(labelText: 'Важность', border: OutlineInputBorder()),
+                    decoration: const InputDecoration(labelText: 'Важность'),
                     items: const [
                       DropdownMenuItem(value: 'low', child: Text('Низкий 🟢')),
                       DropdownMenuItem(value: 'medium', child: Text('Средний 🟡')),
@@ -158,9 +177,10 @@ class _TaskPanelState extends State<TaskPanel> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: InkWell(
+                    borderRadius: BorderRadius.circular(16),
                     onTap: _pickDeadline,
                     child: InputDecorator(
-                      decoration: const InputDecoration(labelText: 'Дедлайн', border: OutlineInputBorder()),
+                      decoration: const InputDecoration(labelText: 'Дедлайн'),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
