@@ -173,7 +173,7 @@ loop:
 					continue
 				}
 
-			case "read":
+			case MessageTypeRead:
 				slog.Debug("ws: messages marked read", "sender", msg.Sender, "room", msg.Receiver)
 				err := c.db.MarkMessagesAsRead(msg.Receiver, msg.Sender)
 				if err != nil {
@@ -181,7 +181,7 @@ loop:
 				}
 
 			// --- НОВЫЙ БЛОК: Обработка "рукопожатия" для старта задачи ---
-			case "task_accept":
+			case MessageTypeTaskAccept:
 				slog.Debug("ws: task accept requested", "task_id", msg.TaskID, "user", msg.Sender)
 
 				// Обращаемся к новому методу БД, который мы написали
@@ -199,7 +199,7 @@ loop:
 				}
 
 				// Меняем тип сообщения на task_sync, чтобы Flutter понял, что надо обновить UI
-				msg.Type = "task_sync"
+				msg.Type = MessageTypeTaskSync
 				msg.Metadata = newMetaBytes
 			}
 
@@ -314,7 +314,7 @@ func (c *Chat) ServeWS(signer token.Signer, repo repository.User) httprouter.Han
 			}
 
 			// Игнорируем join сообщения
-			if msg.Type == "join" {
+			if msg.Type == MessageTypeJoin {
 				continue
 			}
 

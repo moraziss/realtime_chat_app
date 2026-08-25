@@ -6,11 +6,15 @@ import (
 )
 
 const (
-	MessageTypePresence = "presence"
-	MessageTypeStatus   = "status"
-	MessageTypeAuth     = "auth"
-	MessageTypeMessage  = "message"
-	MessageTypeTask     = "task" // ← твоя фича
+	MessageTypePresence   = "presence"
+	MessageTypeStatus     = "status"
+	MessageTypeAuth       = "auth"
+	MessageTypeMessage    = "message"
+	MessageTypeTask       = "task" // ← твоя фича
+	MessageTypeRead       = "read"
+	MessageTypeTaskAccept = "task_accept"
+	MessageTypeTaskSync   = "task_sync"
+	MessageTypeJoin       = "join"
 
 	MessageOffline = "offline"
 	MessageOnline  = "online"
