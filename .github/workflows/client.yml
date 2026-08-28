@@ -1,0 +1,44 @@
+name: client
+
+on:
+  push:
+    branches: [main]
+    paths: ['client/**', '.github/workflows/client.yml']
+  pull_request:
+    branches: [main]
+    paths: ['client/**', '.github/workflows/client.yml']
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: flutter pub get
+        run: flutter pub get
+
+      - name: flutter analyze
+        run: flutter analyze
+
+      - name: flutter test
+        run: flutter test
+
+      - name: flutter build web (smoke build)
+        run: flutter build web
+
+      # Advisory, not a hard gate: the existing codebase predates
+      # dart format's style in a lot of places (condensed one-liners in
+      # several widgets), so gating on it now would turn every unrelated
+      # push red until someone does a deliberate, separate reformat pass.
+      # Still visible in the log for a human to act on.
+      - name: dart format (advisory)
+        continue-on-error: true
+        run: dart format --output=none --set-exit-if-changed .
