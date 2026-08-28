@@ -6,13 +6,13 @@ import 'core_providers.dart';
 /// _TasksScreenState._fetchAllTasks (список комнат, затем задачи каждой,
 /// собранные в один список).
 ///
-/// Handshake принятия задачи (accepted_by.length >= 2 -> in_progress) до сих
-/// пор считается на клиенте, а не на сервере — см. "Heads-up" в плане:
-/// PATCH /tasks/:id прямо сейчас пишет присланный статус как есть, а
-/// db.AcceptTask (который считал бы это сам) подключён только к WS
-/// task_accept, который клиент не отправляет. Пока это не изменится на
-/// бэкенде, здесь воспроизводится ровно та же логика, что была в
-/// _wrapExistingTaskCard.
+/// accept() по-прежнему сам считает handshake (accepted_by.length >= 2 ->
+/// in_progress) и шлёт готовый status/accepted_by, воспроизводя логику
+/// _wrapExistingTaskCard — но это чисто оптимистичное UI-решение, не
+/// граница доверия: сервер (PATCH /tasks/:id -> repo.AcceptTask) сам
+/// пересчитывает оба поля из текущего состояния и id авторизованного
+/// пользователя, игнорируя присланные значения, а refresh() ниже подтягивает
+/// то, что реально сохранилось.
 class TasksNotifier extends AsyncNotifier<List<Task>> {
   @override
   Future<List<Task>> build() => _fetchAll();

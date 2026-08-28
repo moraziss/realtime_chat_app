@@ -197,10 +197,10 @@ class ChatNotifier extends AutoDisposeFamilyAsyncNotifier<ChatEvent, String> {
     });
   }
 
-  /// Сервер рассылает своё обновление задачи под именем 'task_updated', а
-  /// не 'task_update' — то, что этот клиент (и другие) слушают, поэтому
-  /// клиент рассылает 'task_update' сам. См. heads-up в плане: это
-  /// исторический костыль, не то, что стоит менять здесь заодно.
+  /// Сервер рассылает своё обновление задачи под именем 'task_updated'
+  /// (internal/service/task.go), а не 'task_update' — то, что этот клиент
+  /// (и другие) слушают, поэтому клиент рассылает 'task_update' сам.
+  /// Исторический костыль на бэкенде, не то, что стоит менять здесь заодно.
   Future<void> _updateAndBroadcast(
     String taskId,
     Map<String, dynamic> patchBody, {
