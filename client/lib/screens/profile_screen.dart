@@ -1,92 +1,38 @@
-import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
-import '../services/auth_service.dart';
-import '../config.dart';
+import '../models/stats.dart';
+import '../providers/core_providers.dart';
+import '../providers/current_user_providers.dart';
+import '../providers/extended_stats_provider.dart';
+import '../providers/rooms_provider.dart';
 
-class ProfileScreen extends StatefulWidget {
+class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
 
   @override
-  State<ProfileScreen> createState() => _ProfileScreenState();
+  ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
-  final _authService = AuthService();
+class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   final _picker = ImagePicker();
-
-  String _userName = '...';
-  String _userEmail = '...';
-  String _bio = '';
-  String? _avatarPath;
-
-  int _tasksDone = 0;
-  int _totalTasks = 0;
-  double _efficiency = 0.0;
-  bool _isLoading = true;
   bool _isUploading = false;
-
-  int _messagesSent = 0;
-  int _daysInApp = 0;
-  String _favoritePriority = "Нет данных";
-  List<int> _completionHistory = [0, 0, 0, 0, 0, 0, 0];
+  bool _dateFormattingReady = false;
 
   @override
   void initState() {
     super.initState();
     initializeDateFormatting('ru_RU', null).then((_) {
-      if (mounted) _loadAllData();
+      if (mounted) setState(() => _dateFormattingReady = true);
     });
   }
 
-  Future<void> _loadAllData() async {
-    if (!mounted) return;
-    setState(() => _isLoading = true);
-
-    try {
-      final localProfile = await _authService.getLocalProfile();
-      if (mounted) {
-        setState(() {
-          _avatarPath = localProfile['avatar'];
-          _userName = localProfile['name'] ?? _userName;
-          _bio = localProfile['bio'] ?? _bio;
-        });
-      }
-
-      final email = await _authService.getUserEmail();
-      final res = await _authService.get('/users/me');
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        if (mounted) {
-          setState(() {
-            _userName = data['name'] ?? 'Без имени';
-            _userEmail = data['email'] ?? email ?? '';
-            _bio = data['bio'] ?? '';
-            if (data['avatar_url'] != null && data['avatar_url'].toString().isNotEmpty) {
-              String url = data['avatar_url'];
-              if (!url.startsWith('http')) {
-                url = '${AppConfig.apiUrl}$url';
-              }
-              _avatarPath = url;
-              _authService.saveProfileLocally(avatar: _avatarPath);
-            }
-          });
-        }
-      }
-
-      await Future.wait([
-        _fetchRealStats(),
-        _fetchExtendedStats(),
-      ]);
-    } catch (e) {
-      debugPrint("Ошибка загрузки данных профиля: $e");
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
+  String _resolveAvatarUrl(String? raw) {
+    if (raw == null || raw.isEmpty) return '';
+    if (raw.startsWith('http')) return raw;
+    return '${ref.read(authServiceProvider).currentBaseUrl}$raw';
   }
 
   Future<void> _pickAndUploadImage() async {
@@ -103,29 +49,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
       setState(() => _isUploading = true);
 
       final bytes = await image.readAsBytes();
-      final String? uploadedUrl = await _authService.uploadFile(bytes, image.name);
+      final uploadedUrl = await ref.read(authServiceProvider).uploadFile(bytes, image.name);
 
       if (uploadedUrl != null) {
-        // Обновляем профиль на сервере
-        final updateRes = await _authService.put('/users/me', {
-          'avatar_url': uploadedUrl,
-        });
-
-        if (updateRes.statusCode == 200) {
-          String fullUrl = uploadedUrl;
-          if (!fullUrl.startsWith('http')) {
-            fullUrl = '${AppConfig.apiUrl}$fullUrl';
-          }
-
-          setState(() {
-            _avatarPath = fullUrl;
-          });
-          await _authService.saveProfileLocally(avatar: fullUrl);
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Фото профиля обновлено')),
-            );
-          }
+        await ref.read(userRepositoryProvider).updateMe({'avatar_url': uploadedUrl});
+        await ref.read(meProvider.notifier).refresh();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Фото профиля обновлено')),
+          );
         }
       }
     } catch (e) {
@@ -140,37 +72,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Future<void> _fetchRealStats() async {
-    try {
-      final statsRes = await _authService.get('/users/me/stats');
-      if (mounted && statsRes.statusCode == 200) {
-        final data = jsonDecode(statsRes.body);
-        setState(() {
-          _tasksDone = data['done'] ?? 0;
-          _totalTasks = data['total'] ?? 0;
-          _efficiency = _totalTasks > 0 ? (_tasksDone / _totalTasks) * 100 : 0.0;
-        });
-      }
-    } catch (e) { debugPrint("Stat error: $e"); }
-  }
-
-  Future<void> _fetchExtendedStats() async {
-    try {
-      final res = await _authService.get('/users/me/extended-stats');
-      if (mounted && res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        setState(() {
-          _messagesSent = data['messages_sent'] ?? 0;
-          _daysInApp = data['days_since_joined'] ?? 0;
-          _favoritePriority = data['favorite_priority'] ?? "Нет данных";
-          if (data['completion_history'] != null) _completionHistory = List<int>.from(data['completion_history']);
-
-          if (_favoritePriority == "high") _favoritePriority = "Высокий";
-          else if (_favoritePriority == "medium") _favoritePriority = "Средний";
-          else if (_favoritePriority == "low") _favoritePriority = "Низкий";
-        });
-      }
-    } catch (e) { debugPrint("Ext stat error: $e"); }
+  Future<void> _refreshAll() {
+    return Future.wait([
+      ref.read(meProvider.notifier).refresh(),
+      ref.read(taskStatsProvider.notifier).refresh(),
+      ref.read(extendedStatsProvider.notifier).refresh(),
+    ]);
   }
 
   void _showAchievementsInfo() {
@@ -216,10 +123,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+
+    final meAsync = ref.watch(meProvider);
+    final statsAsync = ref.watch(taskStatsProvider);
+    final extAsync = ref.watch(extendedStatsProvider);
+
+    final isLoading = !_dateFormattingReady || (meAsync.isLoading && !meAsync.hasValue);
+    if (isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    final profile = meAsync.valueOrNull;
+    final stats = statsAsync.valueOrNull ?? const TaskStats();
+    final ext = extAsync.valueOrNull ?? const ExtendedStats();
+
+    final userName = profile?.name ?? 'Без имени';
+    final userEmail = profile?.email ?? '';
+    final bio = profile?.bio ?? '';
+    final avatarUrl = _resolveAvatarUrl(profile?.avatarUrl);
+    final efficiency = stats.total > 0 ? (stats.done / stats.total) * 100 : 0.0;
 
     return Scaffold(
-      body: CustomScrollView(
+      body: RefreshIndicator(
+        onRefresh: _refreshAll,
+        child: CustomScrollView(
         physics: const BouncingScrollPhysics(),
         slivers: [
           SliverAppBar(
@@ -235,14 +162,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         child: CircleAvatar(
                           radius: 50,
                           backgroundColor: Colors.white24,
-                          backgroundImage: (_avatarPath != null && _avatarPath!.isNotEmpty)
-                              ? (_avatarPath!.startsWith('http')
-                                  ? NetworkImage(_avatarPath!)
-                                  : FileImage(File(_avatarPath!)) as ImageProvider)
-                              : null,
-                          child: (_avatarPath == null || _avatarPath!.isEmpty)
+                          backgroundImage: avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
+                          child: avatarUrl.isEmpty
                               ? Text(
-                                  _userName.isNotEmpty ? _userName.substring(0, 1).toUpperCase() : '?',
+                                  userName.isNotEmpty ? userName.substring(0, 1).toUpperCase() : '?',
                                   style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: Colors.white),
                                 )
                               : null,
@@ -273,17 +196,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
               delegate: SliverChildListDelegate([
                 Center(
                   child: Column(children: [
-                    Text(_userName, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
-                    Text(_userEmail, style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 14)),
+                    Text(userName, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+                    Text(userEmail, style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 14)),
                   ]),
                 ),
                 const SizedBox(height: 32),
-                _buildStatRow(colorScheme),
+                _buildStatRow(colorScheme, ext),
                 const SizedBox(height: 32),
-                if (_bio.isNotEmpty) ...[
+                if (bio.isNotEmpty) ...[
                   const Text('О себе', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
-                  Text(_bio, style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 15)),
+                  Text(bio, style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 15)),
                   const SizedBox(height: 32),
                 ],
                 Row(
@@ -294,32 +217,46 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                _buildAchievementSection(colorScheme),
+                _buildAchievementSection(colorScheme, stats, ext, efficiency),
                 const SizedBox(height: 32),
                 const Text('Прогресс за неделю', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 16),
-                _buildWeeklyCompletionChart(colorScheme),
+                _buildWeeklyCompletionChart(colorScheme, ext),
                 const SizedBox(height: 32),
-                _buildActivityChart(colorScheme),
+                _buildActivityChart(colorScheme, stats, efficiency),
                 const SizedBox(height: 40),
               ]),
             ),
           ),
         ],
+        ),
       ),
     );
   }
 
-  Widget _buildStatRow(ColorScheme colorScheme) {
+  Widget _buildStatRow(ColorScheme colorScheme, ExtendedStats ext) {
     return Row(
       children: [
-        Expanded(child: _statCard('Месседжи', _messagesSent.toString(), Icons.chat_bubble_outline, colorScheme.primary, colorScheme)),
+        Expanded(child: _statCard('Месседжи', ext.messagesSent.toString(), Icons.chat_bubble_outline, colorScheme.primary, colorScheme)),
         const SizedBox(width: 8),
-        Expanded(child: _statCard('Дни', _daysInApp.toString(), Icons.calendar_today, colorScheme.secondary, colorScheme)),
+        Expanded(child: _statCard('Дни', ext.daysInApp.toString(), Icons.calendar_today, colorScheme.secondary, colorScheme)),
         const SizedBox(width: 8),
-        Expanded(child: _statCard('Фокус', _favoritePriority, Icons.track_changes, colorScheme.tertiary, colorScheme)),
+        Expanded(child: _statCard('Фокус', _translatePriority(ext.favoritePriority), Icons.track_changes, colorScheme.tertiary, colorScheme)),
       ],
     );
+  }
+
+  String _translatePriority(String priority) {
+    switch (priority) {
+      case 'high':
+        return 'Высокий';
+      case 'medium':
+        return 'Средний';
+      case 'low':
+        return 'Низкий';
+      default:
+        return priority;
+    }
   }
 
   Widget _statCard(String label, String value, IconData icon, Color color, ColorScheme colorScheme) {
@@ -330,12 +267,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildAchievementSection(ColorScheme colorScheme) {
+  Widget _buildAchievementSection(ColorScheme colorScheme, TaskStats stats, ExtendedStats ext, double efficiency) {
     final achievements = [
-      _badge(Icons.chat_bubble, 'Собеседник', colorScheme.primary, _messagesSent >= 50, colorScheme),
-      _badge(Icons.workspace_premium, 'Мастер', colorScheme.secondary, _tasksDone >= 10, colorScheme),
-      _badge(Icons.calendar_month, 'Ветеран', colorScheme.tertiary, _daysInApp >= 7, colorScheme),
-      _badge(Icons.speed, 'Сверхзвук', colorScheme.primary, _efficiency >= 90 && _tasksDone > 5, colorScheme),
+      _badge(Icons.chat_bubble, 'Собеседник', colorScheme.primary, ext.messagesSent >= 50, colorScheme),
+      _badge(Icons.workspace_premium, 'Мастер', colorScheme.secondary, stats.done >= 10, colorScheme),
+      _badge(Icons.calendar_month, 'Ветеран', colorScheme.tertiary, ext.daysInApp >= 7, colorScheme),
+      _badge(Icons.speed, 'Сверхзвук', colorScheme.primary, efficiency >= 90 && stats.done > 5, colorScheme),
     ];
 
     return SizedBox(
@@ -390,22 +327,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildActivityChart(ColorScheme colorScheme) {
-    final double progress = _totalTasks > 0 ? (_tasksDone / _totalTasks).clamp(0.0, 1.0) : 0.0;
+  Widget _buildActivityChart(ColorScheme colorScheme, TaskStats stats, double efficiency) {
+    final double progress = stats.total > 0 ? (stats.done / stats.total).clamp(0.0, 1.0) : 0.0;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(color: colorScheme.surfaceContainerHigh, borderRadius: BorderRadius.circular(20)),
-      child: Column(children: [Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Общая эффективность', style: TextStyle(fontWeight: FontWeight.bold)), Text('${(progress * 100).toInt()}%', style: TextStyle(color: colorScheme.primary, fontWeight: FontWeight.bold))]), const SizedBox(height: 12), LinearProgressIndicator(value: progress, borderRadius: BorderRadius.circular(10), minHeight: 8), const SizedBox(height: 16), Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [_chartInfo('Задач', _totalTasks.toString(), colorScheme), _chartInfo('Готово', _tasksDone.toString(), colorScheme), _chartInfo('КПД', '${_efficiency.toInt()}%', colorScheme)])]),
+      child: Column(children: [Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Общая эффективность', style: TextStyle(fontWeight: FontWeight.bold)), Text('${(progress * 100).toInt()}%', style: TextStyle(color: colorScheme.primary, fontWeight: FontWeight.bold))]), const SizedBox(height: 12), LinearProgressIndicator(value: progress, borderRadius: BorderRadius.circular(10), minHeight: 8), const SizedBox(height: 16), Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [_chartInfo('Задач', stats.total.toString(), colorScheme), _chartInfo('Готово', stats.done.toString(), colorScheme), _chartInfo('КПД', '${efficiency.toInt()}%', colorScheme)])]),
     );
   }
 
   Widget _chartInfo(String label, String value, ColorScheme colorScheme) { return Column(children: [Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)), Text(label, style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 11))]); }
 
-  Widget _buildWeeklyCompletionChart(ColorScheme colorScheme) {
+  Widget _buildWeeklyCompletionChart(ColorScheme colorScheme, ExtendedStats ext) {
+    final completionHistory = ext.completionHistory;
     final List<int> history = List<int>.filled(7, 0);
     for (int i = 0; i < 7; i++) {
-      int historyIdx = _completionHistory.length - 1 - i;
-      if (historyIdx >= 0) history[6 - i] = _completionHistory[historyIdx];
+      int historyIdx = completionHistory.length - 1 - i;
+      if (historyIdx >= 0) history[6 - i] = completionHistory[historyIdx];
     }
     final now = DateTime.now();
     final DateFormat formatter = DateFormat('E', 'ru_RU');
