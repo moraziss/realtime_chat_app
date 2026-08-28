@@ -45,6 +45,7 @@ dependencies:
 
   # Красивая типографика
   google_fonts: ^8.1.0
+  flutter_riverpod: ^2.6.1
 
 dev_dependencies:
   flutter_test:
