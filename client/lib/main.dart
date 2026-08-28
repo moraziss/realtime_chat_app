@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+// package:provider уже занимает имена Provider/ChangeNotifierProvider
+// (используются ниже для темы) — riverpod даёт свои одноимённые классы,
+// так что отсюда берём явно только то, что реально нужно: ProviderScope.
+import 'package:flutter_riverpod/flutter_riverpod.dart' show ProviderScope;
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'screens/task_screen.dart';
@@ -16,9 +20,11 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => ThemeProvider(),
-      child: const MessengerApp(),
+    ProviderScope(
+      child: ChangeNotifierProvider(
+        create: (_) => ThemeProvider(),
+        child: const MessengerApp(),
+      ),
     ),
   );
 }
