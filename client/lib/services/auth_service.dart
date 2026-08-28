@@ -468,20 +468,4 @@ class AuthService {
     _cachedUserEmail = prefs.getString(_userEmailKey);
     return _cachedUserEmail;
   }
-
-  final Map<String, String> _users = {};
-  Future<String> getUserName(String userId) async {
-    if (_users.containsKey(userId)) return _users[userId]!;
-    try {
-      final res = await get('/users');
-      if (res.statusCode == 200) {
-        final users = jsonDecode(res.body)['data'] as List? ?? [];
-        for (final u in users) {
-          _users[u['id'].toString()] =
-              u['name'] ?? u['email'] ?? u['id'].toString();
-        }
-      }
-    } catch (_) {}
-    return _users[userId] ?? userId;
-  }
 }
