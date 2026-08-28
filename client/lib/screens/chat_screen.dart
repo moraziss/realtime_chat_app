@@ -10,6 +10,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/websocket_service.dart';
+import '../models/task.dart';
 import '../widgets/task_card.dart';
 import '../widgets/task_panel.dart';
 import '../theme_notifier.dart';
@@ -774,7 +775,11 @@ class _ChatScreenState extends State<ChatScreen> {
                       groupStatus,
                     }) {
                       return TaskCard(
-                        message: message,
+                        // TODO(chat-provider): временная адаптация к типизированному
+                        // TaskCard, пока ChatScreen целиком не переведён на
+                        // chat_provider (следующий коммит) — сама эта логика ниже
+                        // ещё работает поверх сырых Map/message.metadata.
+                        task: Task.fromJson(message.metadata ?? {}),
                         currentUserId: _currentUserId!,
                         onAccept: (taskId) async {
                           final meta = Map<String, dynamic>.from(
@@ -870,10 +875,13 @@ class _ChatScreenState extends State<ChatScreen> {
                           }
                         },
                         onSubtasksUpdated: (taskId, updatedSubtasks) async {
+                          final subtaskMaps = updatedSubtasks
+                              .map((s) => s.toJson())
+                              .toList();
                           final updatedMeta = Map<String, dynamic>.from(
                             message.metadata ?? {},
                           );
-                          updatedMeta['subtasks'] = updatedSubtasks;
+                          updatedMeta['subtasks'] = subtaskMaps;
                           _chatController.updateMessage(
                             message,
                             message.copyWith(metadata: updatedMeta),
@@ -895,7 +903,7 @@ class _ChatScreenState extends State<ChatScreen> {
                             'sender': _currentUserId,
                             'data': jsonEncode({
                               'task_id': taskId,
-                              'subtasks': updatedSubtasks,
+                              'subtasks': subtaskMaps,
                             }),
                           });
                         },

@@ -1,78 +1,36 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter_chat_core/flutter_chat_core.dart';
+import '../models/task.dart';
 
 class TaskCard extends StatelessWidget {
-  final CustomMessage message;
+  final Task task;
   final String currentUserId;
   final Function(String) onAccept;
   final Function(String, String) onStatusChange;
   final Function(String) onDelete;
   final Function(String) onEdit;
-  final Function(String, List<Map<String, dynamic>>) onSubtasksUpdated;
+  final Function(String, List<Subtask>) onSubtasksUpdated;
 
   const TaskCard({
-    Key? key,
-    required this.message,
+    super.key,
+    required this.task,
     required this.currentUserId,
     required this.onAccept,
     required this.onStatusChange,
     required this.onDelete,
     required this.onEdit,
     required this.onSubtasksUpdated,
-  }) : super(key: key);
+  });
 
-  String _formatDate(String isoString) {
-    try {
-      final d = DateTime.parse(isoString);
-      return "${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}";
-    } catch (e) {
-      return isoString;
-    }
+  String _formatDate(DateTime d) {
+    return "${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}";
   }
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final meta = message.metadata ?? {};
 
-    final taskId = meta['task_id']?.toString() ?? '';
-    final status = meta['status']?.toString() ?? 'todo';
-    final title = meta['title']?.toString() ?? 'Задача';
-    final priority = meta['priority']?.toString() ?? 'medium';
-    final description = meta['description']?.toString() ?? '';
-    // Ищем и due_date (как на сервере), и deadline (для совместимости)
-    final deadline = meta['due_date']?.toString() ?? meta['deadline']?.toString();
-
-    // Normalize subtasks: server may send as JSON string or list
-    dynamic rawSubtasks = meta['subtasks'];
-    List<Map<String, dynamic>> subtasks = [];
-    if (rawSubtasks is String) {
-      try {
-        final decoded = jsonDecode(rawSubtasks);
-        if (decoded is List) {
-          subtasks = decoded.map<Map<String, dynamic>>((e) => Map<String, dynamic>.from(e as Map)).toList();
-        }
-      } catch (_) {}
-    } else if (rawSubtasks is List) {
-      subtasks = rawSubtasks.map<Map<String, dynamic>>((e) => Map<String, dynamic>.from(e as Map)).toList();
-    }
-
-    // Normalize accepted_by similarly
-    dynamic rawAccepted = meta['accepted_by'];
-    List<String> acceptedBy = [];
-    if (rawAccepted is String) {
-      try {
-        final decoded = jsonDecode(rawAccepted);
-        if (decoded is List) {
-          acceptedBy = decoded.map<String>((e) => e.toString()).toList();
-        }
-      } catch (_) {}
-    } else if (rawAccepted is List) {
-      acceptedBy = rawAccepted.map<String>((e) => e.toString()).toList();
-    }
-    final isMeAccepted = acceptedBy.contains(currentUserId);
-    final hasPartnerAccepted = acceptedBy.isNotEmpty && !isMeAccepted;
+    final isMeAccepted = task.acceptedByUser(currentUserId);
+    final hasPartnerAccepted = task.acceptedBy.isNotEmpty && !isMeAccepted;
 
     return Container(
       width: 280, // Сделали чуть уже для чата
@@ -101,47 +59,46 @@ class TaskCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, height: 1.2)),
+                    Text(task.title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, height: 1.2)),
                     const SizedBox(height: 6),
                     Wrap( // Wrap позволяет тегам переноситься на новую строку, если не влезают
                       spacing: 6,
                       runSpacing: 6,
                       children: [
-                        _buildPriorityBadge(priority),
-                        if (deadline != null && deadline.isNotEmpty)
-                          _buildDeadlineBadge(deadline),
+                        _buildPriorityBadge(task.priority),
+                        if (task.dueDate != null) _buildDeadlineBadge(task.dueDate!),
                       ],
                     ),
                   ],
                 ),
               ),
-              _buildMenu(taskId),
+              _buildMenu(task.id),
             ],
           ),
 
-          if (description.isNotEmpty) ...[
+          if (task.description.isNotEmpty) ...[
             const SizedBox(height: 10),
             Text(
-              description,
+              task.description,
               style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
               maxLines: 2, // Ограничиваем описание 2 строками!
               overflow: TextOverflow.ellipsis,
             ),
           ],
 
-          if (subtasks.isNotEmpty) _buildSubtasksArea(context, subtasks, taskId),
+          if (task.subtasks.isNotEmpty) _buildSubtasksArea(context, task.subtasks, task.id),
 
           const SizedBox(height: 12),
           Divider(height: 1, color: Colors.grey.withOpacity(0.2)),
           const SizedBox(height: 12),
-          _buildActionArea(status, isMeAccepted, hasPartnerAccepted, taskId),
+          _buildActionArea(task.status, isMeAccepted, hasPartnerAccepted, task.id),
         ],
       ),
     );
   }
 
-  Widget _buildSubtasksArea(BuildContext context, List<Map<String, dynamic>> subtasks, String taskId) {
-    int completed = subtasks.where((s) => s['is_done'] == true).length;
+  Widget _buildSubtasksArea(BuildContext context, List<Subtask> subtasks, String taskId) {
+    int completed = subtasks.where((s) => s.isDone).length;
     double progress = subtasks.isEmpty ? 0 : completed / subtasks.length;
     final colorScheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -177,12 +134,10 @@ class TaskCard extends StatelessWidget {
           ...subtasks.asMap().entries.map((entry) {
             final idx = entry.key;
             final st = entry.value;
-            final isDone = st['is_done'] == true;
             return InkWell(
               onTap: () {
-                final updated = List<Map<String, dynamic>>.from(subtasks);
-                updated[idx] = Map<String, dynamic>.from(st);
-                updated[idx]['is_done'] = !isDone;
+                final updated = List<Subtask>.from(subtasks);
+                updated[idx] = st.copyWith(isDone: !st.isDone);
                 onSubtasksUpdated(taskId, updated);
               },
               child: Padding(
@@ -190,18 +145,18 @@ class TaskCard extends StatelessWidget {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(isDone ? Icons.check_box : Icons.check_box_outline_blank,
-                        color: isDone ? Colors.green : Colors.grey.shade400, size: 16),
+                    Icon(st.isDone ? Icons.check_box : Icons.check_box_outline_blank,
+                        color: st.isDone ? Colors.green : Colors.grey.shade400, size: 16),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        st['title']?.toString() ?? '',
+                        st.title,
                         style: TextStyle(
                           fontSize: 12, // Уменьшенный шрифт
-                          color: isDone
+                          color: st.isDone
                               ? Colors.grey
                               : (isDark ? Colors.white : Colors.black87),
-                          decoration: isDone ? TextDecoration.lineThrough : null,
+                          decoration: st.isDone ? TextDecoration.lineThrough : null,
                         ),
                       ),
                     ),
@@ -209,13 +164,13 @@ class TaskCard extends StatelessWidget {
                 ),
               ),
             );
-          }).toList(),
+          }),
         ],
       ),
     );
   }
 
-  Widget _buildDeadlineBadge(String deadline) {
+  Widget _buildDeadlineBadge(DateTime deadline) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
       decoration: BoxDecoration(color: Colors.red.withOpacity(0.08), borderRadius: BorderRadius.circular(6)),

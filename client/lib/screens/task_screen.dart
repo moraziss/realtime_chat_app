@@ -1,63 +1,32 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter_chat_core/flutter_chat_core.dart'; // Нужно для CustomMessage
-import '../services/auth_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../models/task.dart';
+import '../providers/current_user_providers.dart';
+import '../providers/tasks_provider.dart';
 import '../widgets/task_card.dart';
 import '../widgets/task_panel.dart';
 
-class TasksScreen extends StatefulWidget {
+class TasksScreen extends ConsumerStatefulWidget {
   const TasksScreen({super.key});
 
   @override
-  State<TasksScreen> createState() => _TasksScreenState();
+  ConsumerState<TasksScreen> createState() => _TasksScreenState();
 }
 
-class _TasksScreenState extends State<TasksScreen>
+class _TasksScreenState extends ConsumerState<TasksScreen>
     with SingleTickerProviderStateMixin {
-  final _authService = AuthService();
   late TabController _tabController;
-  List<dynamic> _allTasks = [];
-  bool _isLoading = true;
-  String? _currentUserId;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
-    _initializeData();
   }
 
-  Future<void> _initializeData() async {
-    _currentUserId = await _authService.getUserId();
-    await _fetchAllTasks();
-  }
-
-  Future<void> _fetchAllTasks() async {
-    try {
-      final roomsRes = await _authService.get('/rooms');
-      final rooms = jsonDecode(roomsRes.body)['data'] as List? ?? [];
-
-      List<dynamic> aggregatedTasks = [];
-
-      for (var room in rooms) {
-        final tasksRes = await _authService.get(
-          '/rooms/${room['id'] ?? room['room_id']}/tasks',
-        );
-        if (tasksRes.statusCode == 200) {
-          final tasks = jsonDecode(tasksRes.body)['data'] as List? ?? [];
-          aggregatedTasks.addAll(tasks);
-        }
-      }
-
-      if (mounted) {
-        setState(() {
-          _allTasks = aggregatedTasks;
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) setState(() => _isLoading = false);
-    }
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   @override
@@ -66,6 +35,9 @@ class _TasksScreenState extends State<TasksScreen>
     final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
     final headerForeground = isDark ? colorScheme.onSurface : Colors.white;
+
+    final tasksAsync = ref.watch(tasksProvider);
+    final currentUserId = ref.watch(currentUserIdProvider).valueOrNull ?? '';
 
     return Scaffold(
       appBar: AppBar(
@@ -105,23 +77,31 @@ class _TasksScreenState extends State<TasksScreen>
         ),
       ),
       body: RefreshIndicator(
-        onRefresh: _fetchAllTasks,
-        child: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : TabBarView(
-                controller: _tabController,
-                children: [
-                  _buildTaskColumn('todo', colorScheme),
-                  _buildTaskColumn('in_progress', colorScheme),
-                  _buildTaskColumn('done', colorScheme),
-                ],
-              ),
+        onRefresh: () => ref.read(tasksProvider.notifier).refresh(),
+        child: tasksAsync.when(
+          data: (tasks) => TabBarView(
+            controller: _tabController,
+            children: [
+              _buildTaskColumn('todo', colorScheme, tasks, currentUserId),
+              _buildTaskColumn('in_progress', colorScheme, tasks, currentUserId),
+              _buildTaskColumn('done', colorScheme, tasks, currentUserId),
+            ],
+          ),
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (e, _) =>
+              const Center(child: Text('Не удалось загрузить задачи')),
+        ),
       ),
     );
   }
 
-  Widget _buildTaskColumn(String status, ColorScheme colorScheme) {
-    final tasks = _allTasks.where((t) => t['status'] == status).toList();
+  Widget _buildTaskColumn(
+    String status,
+    ColorScheme colorScheme,
+    List<Task> allTasks,
+    String currentUserId,
+  ) {
+    final tasks = allTasks.where((t) => t.status == status).toList();
     if (tasks.isEmpty) {
       return LayoutBuilder(
         builder: (context, constraints) => SingleChildScrollView(
@@ -160,70 +140,37 @@ class _TasksScreenState extends State<TasksScreen>
       itemBuilder: (context, index) {
         return Padding(
           padding: const EdgeInsets.only(bottom: 12),
-          child: _wrapExistingTaskCard(tasks[index]),
+          child: _buildTaskCard(tasks[index], currentUserId),
         );
       },
     );
   }
 
-  Widget _wrapExistingTaskCard(dynamic taskData) {
-    final metadata = {
-      'task_id': taskData['id'].toString(),
-      'status': taskData['status'],
-      'title': taskData['title'],
-      'priority': taskData['priority'] ?? 'medium',
-      'description': taskData['description'] ?? '',
-      'due_date': taskData['due_date'],
-      'subtasks': taskData['subtasks'] ?? [],
-      'accepted_by': taskData['accepted_by'] ?? [],
-    };
-
-    final message = CustomMessage(
-      id: taskData['id'].toString(),
-      authorId: taskData['created_by'] ?? '',
-      createdAt:
-          DateTime.tryParse(taskData['created_at'] ?? '') ?? DateTime.now(),
-      metadata: metadata,
-    );
-
+  Widget _buildTaskCard(Task task, String currentUserId) {
     return TaskCard(
-      currentUserId: _currentUserId ?? '',
-      message: message,
-      onAccept: (id) => _runTaskAction(() async {
-        // Та же логика "принятия обеими сторонами", что и в чате: статус
-        // становится in_progress только когда accepted_by содержит обоих
-        // участников, иначе задача остаётся в ожидании напарника.
-        final rawAccepted = metadata['accepted_by'];
-        List<String> acceptedBy = rawAccepted is List
-            ? rawAccepted.map<String>((e) => e.toString()).toList()
-            : <String>[];
-        if (_currentUserId != null && !acceptedBy.contains(_currentUserId)) {
-          acceptedBy.add(_currentUserId!);
-        }
-        final newStatus = acceptedBy.length >= 2 ? 'in_progress' : 'todo';
-        await _authService.patch('/tasks/$id', {
-          'status': newStatus,
-          'accepted_by': acceptedBy,
-        });
-      }),
-      onStatusChange: (id, s) =>
-          _runTaskAction(() => _authService.patch('/tasks/$id', {'status': s})),
-      onDelete: (id) => _runTaskAction(() => _authService.delete('/tasks/$id')),
-      onEdit: (id) async {
-        // Переиспользуем TaskPanel как в чате через шторку
-        // Чтобы не ломать API, шлем только измененные поля
+      currentUserId: currentUserId,
+      task: task,
+      onAccept: (id) => _runTaskAction(
+        () => ref.read(tasksProvider.notifier).accept(id, currentUserId),
+      ),
+      onStatusChange: (id, s) => _runTaskAction(
+        () => ref.read(tasksProvider.notifier).changeStatus(id, s),
+      ),
+      onDelete: (id) =>
+          _runTaskAction(() => ref.read(tasksProvider.notifier).delete(id)),
+      onEdit: (id) {
+        // Переиспользуем TaskPanel как в чате через шторку.
         showModalBottomSheet(
           context: context,
           isScrollControlled: true,
           builder: (sheetContext) => TaskPanel(
-            initialData: metadata,
+            initialData: task.toJson(),
             onSubmit: (dynamic taskData) async {
               if (taskData is! Map) return;
               final payload = Map<String, dynamic>.from(taskData);
               try {
-                await _authService.patch('/tasks/$id', payload);
+                await ref.read(tasksProvider.notifier).edit(id, payload);
                 if (mounted) Navigator.of(sheetContext).pop();
-                _fetchAllTasks();
               } catch (e) {
                 debugPrint('edit task in TasksScreen error: $e');
                 if (mounted) {
@@ -238,25 +185,19 @@ class _TasksScreenState extends State<TasksScreen>
           ),
         );
       },
-      onSubtasksUpdated: (taskId, updatedSubtasks) => _runTaskAction(() {
-        // Отправляем полный набор полей задачи (как в чате), а не только
-        // subtasks: PATCH /tasks/:id трактует такой запрос как полное
-        // обновление и иначе перезаписал бы остальные поля (например
-        // due_date) пустыми значениями.
-        final payload = Map<String, dynamic>.from(metadata);
-        payload['subtasks'] = updatedSubtasks;
-        return _authService.patch('/tasks/$taskId', payload);
-      }),
+      onSubtasksUpdated: (taskId, updatedSubtasks) => _runTaskAction(
+        () => ref
+            .read(tasksProvider.notifier)
+            .updateSubtasks(taskId, updatedSubtasks),
+      ),
     );
   }
 
-  /// Выполняет действие над задачей, обновляет список при успехе и
-  /// показывает snackbar при ошибке вместо того, чтобы падение запроса
-  /// прошло совсем незамеченным.
+  /// Выполняет действие над задачей и показывает snackbar при ошибке —
+  /// провайдер уже сам обновляет список после успешного действия.
   Future<void> _runTaskAction(Future<void> Function() action) async {
     try {
       await action();
-      _fetchAllTasks();
     } catch (e) {
       debugPrint('Task action error: $e');
       if (mounted) {
