@@ -19,7 +19,15 @@ class AppDrawer extends ConsumerWidget {
     final profile = ref.watch(meProvider).valueOrNull;
     final userName = profile?.name ?? '...';
     final userEmail = profile?.email ?? '';
-    final avatarUrl = profile?.avatarUrl;
+    // avatar_url приходит с сервера как относительный путь (/uploads/...) —
+    // resolve его тем же способом, что раньше делал ProfileScreen перед
+    // кэшированием в SharedPreferences.
+    final rawAvatar = profile?.avatarUrl;
+    final avatarUrl = (rawAvatar == null || rawAvatar.isEmpty)
+        ? null
+        : (rawAvatar.startsWith('http')
+              ? rawAvatar
+              : '${ref.watch(authServiceProvider).currentBaseUrl}$rawAvatar');
 
     final String initial = userName.isNotEmpty ? userName.substring(0, 1).toUpperCase() : '?';
 
