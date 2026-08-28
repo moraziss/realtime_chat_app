@@ -1,5 +1,5 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
+import '../models/task.dart';
 
 class SubtaskModel {
   String id;
@@ -10,7 +10,7 @@ class SubtaskModel {
 
 class TaskPanel extends StatefulWidget {
   final Function(Map<String, dynamic>) onSubmit;
-  final Map<String, dynamic>? initialData;
+  final Task? initialData;
 
   const TaskPanel({super.key, required this.onSubmit, this.initialData});
 
@@ -29,36 +29,18 @@ class _TaskPanelState extends State<TaskPanel> {
   @override
   void initState() {
     super.initState();
-    _titleController = TextEditingController(text: widget.initialData?['title'] ?? '');
-    _descController = TextEditingController(text: widget.initialData?['description'] ?? '');
-    _priority = widget.initialData?['priority'] ?? 'medium';
+    final initial = widget.initialData;
+    _titleController = TextEditingController(text: initial?.title ?? '');
+    _descController = TextEditingController(text: initial?.description ?? '');
+    _priority = initial?.priority ?? 'medium';
+    _deadline = initial?.dueDate;
 
-    // Пытаемся прочитать due_date (как на сервере) или deadline (для совместимости)
-    final rawDueDate = widget.initialData?['due_date'] ?? widget.initialData?['deadline'];
-    if (rawDueDate != null) {
-      _deadline = DateTime.tryParse(rawDueDate.toString());
-    }
-
-    // Normalize subtasks from initialData: may be List or JSON string
-    List<dynamic> existingSubtasks = [];
-    final raw = widget.initialData?['subtasks'];
-    if (raw is String) {
-      try {
-        final decoded = jsonDecode(raw);
-        if (decoded is List) existingSubtasks = decoded;
-      } catch (_) {}
-    } else if (raw is List) {
-      existingSubtasks = raw;
-    }
-
-    for (var st in existingSubtasks) {
-      if (st is Map) {
-        _subtasks.add(SubtaskModel(
-          id: st['id']?.toString() ?? DateTime.now().microsecondsSinceEpoch.toString(),
-          controller: TextEditingController(text: st['title']?.toString() ?? ''),
-          isDone: st['is_done'] == true,
-        ));
-      }
+    for (final st in initial?.subtasks ?? const []) {
+      _subtasks.add(SubtaskModel(
+        id: st.id.isNotEmpty ? st.id : DateTime.now().microsecondsSinceEpoch.toString(),
+        controller: TextEditingController(text: st.title),
+        isDone: st.isDone,
+      ));
     }
   }
 

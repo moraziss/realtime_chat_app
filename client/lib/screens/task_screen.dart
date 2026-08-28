@@ -164,7 +164,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
           context: context,
           isScrollControlled: true,
           builder: (sheetContext) => TaskPanel(
-            initialData: task.toJson(),
+            initialData: task,
             onSubmit: (dynamic taskData) async {
               if (taskData is! Map) return;
               final payload = Map<String, dynamic>.from(taskData);

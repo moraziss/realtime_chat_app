@@ -1,342 +1,150 @@
-import 'dart:async';
-import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_chat_core/flutter_chat_core.dart';
-import 'package:flutter_chat_ui/flutter_chat_ui.dart';
-import 'package:uuid/uuid.dart';
-import '../services/auth_service.dart';
+// flutter_chat_ui exports its own ChatMessage widget, which collides with
+// our domain model of the same name — we only need the Chat widget from
+// this package, not its ChatMessage.
+import 'package:flutter_chat_ui/flutter_chat_ui.dart' hide ChatMessage;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../services/websocket_service.dart';
+import '../models/chat_message.dart';
 import '../models/task.dart';
+import '../providers/chat_provider.dart';
+import '../providers/core_providers.dart';
+import '../providers/current_user_providers.dart';
+import '../repositories/api_exception.dart';
 import '../widgets/task_card.dart';
 import '../widgets/task_panel.dart';
 import '../theme_notifier.dart';
 
-class ChatScreen extends StatefulWidget {
+class ChatScreen extends ConsumerStatefulWidget {
   final String roomId;
   final String? roomName;
   const ChatScreen({super.key, required this.roomId, this.roomName});
 
   @override
-  State<ChatScreen> createState() => _ChatScreenState();
+  ConsumerState<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen> {
-  final _authService = AuthService();
+class _ChatScreenState extends ConsumerState<ChatScreen> {
   late final InMemoryChatController _chatController = InMemoryChatController();
-  final _uuid = const Uuid();
-
-  String? _currentUserId;
-  bool _isLoading = true;
   String? _displayTitle;
-
-  final Set<String> _seenMessageIds = {};
-  StreamSubscription<Map<String, dynamic>>? _wsSubscription;
 
   @override
   void initState() {
     super.initState();
     _displayTitle = widget.roomName;
-    _initializeChat();
   }
 
   @override
   void dispose() {
-    _wsSubscription?.cancel();
     _chatController.dispose();
     super.dispose();
   }
 
-  Future<void> _initializeChat() async {
-    _currentUserId = await _authService.getUserId();
-    if (_displayTitle == null) {
-      _loadRoomInfo();
+  void _onChatEvent(AsyncValue<ChatEvent>? previous, AsyncValue<ChatEvent> next) {
+    final event = next.valueOrNull;
+    if (event == null) return;
+    final myUserId = ref.read(currentUserIdProvider).valueOrNull ?? '';
+
+    switch (event) {
+      case ChatHistoryLoaded(:final messages, :final roomName):
+        if (roomName != null && mounted) setState(() => _displayTitle = roomName);
+        _chatController.messages.clear();
+        for (final m in messages) {
+          _chatController.insertMessage(_toUiMessage(m, myUserId));
+        }
+      case ChatMessageReceived(:final message):
+        _chatController.insertMessage(_toUiMessage(message, myUserId));
+      case ChatReadReceiptReceived():
+        for (final m in _chatController.messages) {
+          if (m.authorId == myUserId && m.status != MessageStatus.seen) {
+            _chatController.updateMessage(m, m.copyWith(status: MessageStatus.seen));
+          }
+        }
+      case ChatTaskUpdated(:final taskId, :final data):
+        for (final m in _chatController.messages) {
+          final meta = m.metadata;
+          if (meta != null && meta['task_id']?.toString() == taskId) {
+            final updated = Map<String, dynamic>.from(meta)..addAll(data);
+            _chatController.updateMessage(m, m.copyWith(metadata: updated));
+            break;
+          }
+        }
+      case ChatTaskDeleted(:final taskId):
+        for (final m in _chatController.messages) {
+          if (m.metadata?['task_id']?.toString() == taskId) {
+            _chatController.removeMessage(m);
+            break;
+          }
+        }
     }
-    await WebSocketService().connect();
-    await _loadHistory();
-    _connectWebSocket();
-    setState(() => _isLoading = false);
   }
 
-  Future<void> _loadRoomInfo() async {
-    try {
-      final res = await _authService.get('/rooms');
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        final rooms = data['data'] as List? ?? [];
-        final room = rooms.firstWhere(
-          (r) =>
-              r['id']?.toString() == widget.roomId ||
-              r['room_id']?.toString() == widget.roomId,
-          orElse: () => null,
+  Message _toUiMessage(ChatMessage m, String myUserId) {
+    final isMe = m.authorId == myUserId;
+    final status = isMe ? (m.isRead ? MessageStatus.seen : MessageStatus.sent) : null;
+    final baseUrl = ref.read(authServiceProvider).currentBaseUrl;
+
+    switch (m.kind) {
+      case ChatMessageKind.task:
+        return Message.custom(
+          id: m.id,
+          authorId: m.authorId,
+          createdAt: m.createdAt,
+          status: status,
+          metadata: m.task!.toJson(),
         );
-        if (room != null && mounted) {
-          setState(() => _displayTitle = room['name']);
-        }
-      }
-    } catch (_) {}
-  }
-
-  Future<void> _loadHistory() async {
-    final res = await _authService.get('/conversations/${widget.roomId}');
-    if (res.statusCode == 200) {
-      final conversations = jsonDecode(res.body)['data'] as List? ?? [];
-
-      _chatController.messages.clear();
-      _seenMessageIds.clear();
-      for (final conv in conversations) {
-        final authorId = conv['user_id'].toString();
-        _seenMessageIds.add(conv['id'].toString());
-        final isMe = authorId == _currentUserId;
-        final createdAt = DateTime.parse(conv['created_at']).toUtc();
-
-        Map<String, dynamic>? meta;
-        if (conv['metadata'] != null) {
-          try {
-            meta = conv['metadata'] is String
-                ? jsonDecode(conv['metadata']) as Map<String, dynamic>
-                : Map<String, dynamic>.from(conv['metadata'] as Map);
-          } catch (_) {}
-        }
-
-        final bool isRead = meta != null && meta['is_read'] == true;
-        final status = isMe
-            ? (isRead ? MessageStatus.seen : MessageStatus.sent)
-            : null;
-
-        if (meta != null && meta['task_id'] != null) {
-          _chatController.insertMessage(
-            Message.custom(
-              id: conv['id'].toString(),
-              authorId: authorId,
-              createdAt: createdAt,
-              status: status,
-              metadata: Map<String, dynamic>.from(meta),
-            ),
-          );
-        } else if (meta != null && meta['is_image'] == true) {
-          _chatController.insertMessage(
-            Message.image(
-              id: conv['id'].toString(),
-              authorId: authorId,
-              createdAt: createdAt,
-              status: status,
-              source: '${_authService.currentBaseUrl}${meta['url']}',
-            ),
-          );
-        } else if (meta != null && meta['is_file'] == true) {
-          _chatController.insertMessage(
-            Message.file(
-              id: conv['id'].toString(),
-              authorId: authorId,
-              createdAt: createdAt,
-              status: status,
-              name: meta['name'] ?? 'file',
-              size: (meta['size'] as num?)?.toInt() ?? 0,
-              source: '${_authService.currentBaseUrl}${meta['url']}',
-            ),
-          );
-        } else {
-          _chatController.insertMessage(
-            Message.text(
-              id: conv['id'].toString(),
-              authorId: authorId,
-              createdAt: createdAt,
-              status: status,
-              text: conv['text'] ?? conv['data'] ?? '',
-            ),
-          );
-        }
-      }
+      case ChatMessageKind.image:
+        return Message.image(
+          id: m.id,
+          authorId: m.authorId,
+          createdAt: m.createdAt,
+          status: status,
+          source: '$baseUrl${m.fileUrl}',
+        );
+      case ChatMessageKind.file:
+        return Message.file(
+          id: m.id,
+          authorId: m.authorId,
+          createdAt: m.createdAt,
+          status: status,
+          name: m.fileName ?? 'file',
+          size: m.fileSize ?? 0,
+          source: '$baseUrl${m.fileUrl}',
+        );
+      case ChatMessageKind.text:
+        return Message.text(
+          id: m.id,
+          authorId: m.authorId,
+          createdAt: m.createdAt,
+          status: status,
+          text: m.text ?? '',
+        );
     }
   }
 
-  void _sendReadReceipt() {
-    WebSocketService().send(<String, dynamic>{
-      'type': 'read',
-      'room': widget.roomId,
-      'sender': _currentUserId,
-    });
-  }
-
-  void _connectWebSocket() {
-    WebSocketService().send(<String, dynamic>{
-      'type': 'join',
-      'room': widget.roomId,
-      'sender': _currentUserId,
-    });
-
-    _sendReadReceipt();
-
-    _wsSubscription?.cancel();
-    _wsSubscription = WebSocketService().stream.listen((msg) {
-      if (!mounted) return;
-
-      if (msg['type'] == 'read' &&
-          msg['room']?.toString() == widget.roomId.toString()) {
-        if (msg['sender']?.toString() != _currentUserId) {
-          setState(() {
-            final messages = _chatController.messages;
-            for (final m in messages) {
-              if (m.authorId == _currentUserId &&
-                  m.status != MessageStatus.seen) {
-                _chatController.updateMessage(
-                  m,
-                  m.copyWith(status: MessageStatus.seen),
-                );
-              }
-            }
-          });
-        }
-        return;
-      }
-
-      if ((msg['type'] == 'message' || msg['type'] == 'task_created') &&
-          msg['room']?.toString() == widget.roomId.toString()) {
-        final senderId = msg['sender']?.toString();
-        if (senderId != _currentUserId) {
-          _sendReadReceipt();
-        } else {
-          if (msg['type'] == 'message') return;
-        }
-
-        final msgId = msg['id']?.toString() ?? _uuid.v4();
-        if (_seenMessageIds.contains(msgId)) return;
-        _seenMessageIds.add(msgId);
-
-        Map<String, dynamic>? metadata;
-        if (msg['metadata'] != null) {
-          try {
-            metadata = msg['metadata'] is String
-                ? jsonDecode(msg['metadata']) as Map<String, dynamic>
-                : Map<String, dynamic>.from(msg['metadata'] as Map);
-          } catch (_) {}
-        }
-
-        final bool isTask =
-            (metadata != null && metadata.containsKey('task_id')) ||
-            msg['type'] == 'task_created';
-
-        if (isTask) {
-          _chatController.insertMessage(
-            Message.custom(
-              id: msgId,
-              authorId: senderId ?? '',
-              createdAt: DateTime.now().toUtc(),
-              metadata:
-                  metadata ??
-                  (msg['data'] is Map
-                      ? Map<String, dynamic>.from(msg['data'])
-                      : {}),
-            ),
-          );
-        } else if (metadata != null && metadata['is_image'] == true) {
-          _chatController.insertMessage(
-            Message.image(
-              id: msgId,
-              authorId: senderId ?? '',
-              createdAt: DateTime.now().toUtc(),
-              source: '${_authService.currentBaseUrl}${metadata['url']}',
-            ),
-          );
-        } else if (metadata != null && metadata['is_file'] == true) {
-          _chatController.insertMessage(
-            Message.file(
-              id: msgId,
-              authorId: senderId ?? '',
-              createdAt: DateTime.now().toUtc(),
-              name: metadata['name'] ?? 'file',
-              size: (metadata['size'] as num?)?.toInt() ?? 0,
-              source: '${_authService.currentBaseUrl}${metadata['url']}',
-            ),
-          );
-        } else {
-          _chatController.insertMessage(
-            Message.text(
-              id: msgId,
-              authorId: senderId ?? '',
-              createdAt: DateTime.now().toUtc(),
-              text: msg['data'] ?? msg['text'] ?? '',
-            ),
-          );
-        }
-      }
-
-      if (msg['type'] == 'task_update' &&
-          msg['room']?.toString() == widget.roomId.toString()) {
-        try {
-          final data = msg['data'] is String
-              ? jsonDecode(msg['data']) as Map<String, dynamic>
-              : Map<String, dynamic>.from(msg['data'] as Map);
-          final taskId = data['task_id'];
-          final messages = _chatController.messages;
-          for (final message in messages) {
-            final meta = message.metadata;
-            if (meta != null && meta['task_id'] == taskId) {
-              final updatedMeta = Map<String, dynamic>.from(meta);
-              updatedMeta.addAll(data);
-              _chatController.updateMessage(
-                message,
-                message.copyWith(metadata: updatedMeta),
-              );
-              break;
-            }
-          }
-        } catch (e) {
-          debugPrint('task_update error: $e');
-        }
-      }
-
-      if (msg['type'] == 'task_deleted' &&
-          msg['room']?.toString() == widget.roomId.toString()) {
-        try {
-          final taskId = msg['task_id']?.toString();
-          if (taskId == null) return;
-          final messages = _chatController.messages;
-          for (final message in messages) {
-            if (message.metadata != null &&
-                message.metadata!['task_id']?.toString() == taskId) {
-              _chatController.removeMessage(message);
-              break;
-            }
-          }
-        } catch (e) {
-          debugPrint('task_deleted error: $e');
-        }
-      }
-    });
+  Future<void> _runTaskAction(
+    Future<void> Function() action, {
+    required String failureMessage,
+  }) async {
+    try {
+      await action();
+    } catch (e) {
+      debugPrint('task action error: $e');
+      _notifyActionFailed(failureMessage);
+    }
   }
 
   void _handleSendPressed(String text) {
-    if (text.trim().isEmpty) return;
-    final localMsgId = _uuid.v4();
-    _seenMessageIds.add(localMsgId);
-
-    _chatController.insertMessage(
-      Message.text(
-        id: localMsgId,
-        authorId: _currentUserId!,
-        createdAt: DateTime.now().toUtc(),
-        status: MessageStatus.sent,
-        text: text,
-      ),
-    );
-
-    WebSocketService().send(<String, dynamic>{
-      'type': 'message',
-      'room': widget.roomId,
-      'sender': _currentUserId,
-      'data': text,
-    });
+    ref.read(chatProvider(widget.roomId).notifier).sendText(text);
   }
 
   void _handleFileSelection({required bool isImage}) async {
     Uint8List? fileBytes;
     String? fileName;
-    int? fileSize;
 
     if (isImage) {
       final ImagePicker picker = ImagePicker();
@@ -349,7 +157,6 @@ class _ChatScreenState extends State<ChatScreen> {
       if (image != null) {
         fileBytes = await image.readAsBytes();
         fileName = image.name;
-        fileSize = fileBytes.length;
       }
     } else {
       // withData: true — иначе на web байты вообще не приходят (там нет
@@ -361,54 +168,13 @@ class _ChatScreenState extends State<ChatScreen> {
       if (result != null && result.files.single.bytes != null) {
         fileBytes = result.files.single.bytes;
         fileName = result.files.single.name;
-        fileSize = result.files.single.size;
       }
     }
 
     if (fileBytes != null && fileName != null) {
-      final url = await _authService.uploadFile(fileBytes, fileName);
-      if (url != null) {
-        final metadata = {
-          'is_image': isImage,
-          'is_file': !isImage,
-          'url': url,
-          'name': fileName,
-          'size': fileSize,
-        };
-        final localMsgId = _uuid.v4();
-        _seenMessageIds.add(localMsgId);
-
-        if (isImage) {
-          _chatController.insertMessage(
-            Message.image(
-              id: localMsgId,
-              authorId: _currentUserId!,
-              createdAt: DateTime.now().toUtc(),
-              status: MessageStatus.sent,
-              source: '${_authService.currentBaseUrl}$url',
-            ),
-          );
-        } else {
-          _chatController.insertMessage(
-            Message.file(
-              id: localMsgId,
-              authorId: _currentUserId!,
-              createdAt: DateTime.now().toUtc(),
-              status: MessageStatus.sent,
-              name: fileName,
-              size: fileSize ?? 0,
-              source: '${_authService.currentBaseUrl}$url',
-            ),
-          );
-        }
-
-        WebSocketService().send({
-          'type': 'message',
-          'room': widget.roomId,
-          'sender': _currentUserId,
-          'metadata': metadata,
-        });
-      }
+      await ref
+          .read(chatProvider(widget.roomId).notifier)
+          .sendAttachment(fileBytes, fileName, isImage: isImage);
     }
   }
 
@@ -430,25 +196,21 @@ class _ChatScreenState extends State<ChatScreen> {
         onSubmit: (dynamic data) async {
           if (data is! Map) return;
           final payload = Map<String, dynamic>.from(data);
-          payload['status'] = 'todo';
-          payload['accepted_by'] = [];
-
-          final response = await _authService.post(
-            '/rooms/${widget.roomId}/tasks',
-            payload,
-          );
-          if (response.statusCode == 200 || response.statusCode == 201) {
+          try {
+            await ref.read(chatProvider(widget.roomId).notifier).createTask(payload);
             if (mounted && Navigator.of(sheetContext).canPop()) {
               Navigator.of(sheetContext).pop();
             }
-          } else {
+          } on ApiException catch (e) {
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    'Ошибка создания задачи: ${response.statusCode}',
-                  ),
-                ),
+                SnackBar(content: Text('Ошибка создания задачи: ${e.statusCode}')),
+              );
+            }
+          } catch (e) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Ошибка создания задачи')),
               );
             }
           }
@@ -457,38 +219,21 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  void _openEditTaskPanel(Message message) {
-    final meta = Map<String, dynamic>.from(message.metadata ?? {});
-    final taskId = meta['task_id'];
-
+  void _openEditTaskPanel(Task task) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       builder: (sheetContext) => TaskPanel(
-        initialData: meta,
+        initialData: task,
         onSubmit: (dynamic taskData) async {
           if (taskData is! Map) return;
           final payload = Map<String, dynamic>.from(taskData);
-          final updatedMeta = Map<String, dynamic>.from(meta)..addAll(payload);
-          _chatController.updateMessage(
-            message,
-            message.copyWith(metadata: updatedMeta),
-          );
           try {
-            await _authService.patch('/tasks/$taskId', updatedMeta);
+            await ref.read(chatProvider(widget.roomId).notifier).editTask(task, payload);
           } catch (e) {
             debugPrint('edit task error: $e');
             _notifyActionFailed('Не удалось сохранить изменения');
           }
-          WebSocketService().send(<String, dynamic>{
-            'type': 'task_update',
-            'room': widget.roomId,
-            'sender': _currentUserId,
-            'data': jsonEncode(<String, dynamic>{
-              'task_id': taskId,
-              ...payload,
-            }),
-          });
           if (mounted && Navigator.of(sheetContext).canPop()) {
             Navigator.of(sheetContext).pop();
           }
@@ -607,8 +352,19 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading)
+    final chatAsync = ref.watch(chatProvider(widget.roomId));
+    ref.listen(chatProvider(widget.roomId), _onChatEvent);
+    final myUserId = ref.watch(currentUserIdProvider).valueOrNull ?? '';
+
+    if (chatAsync.isLoading && !chatAsync.hasValue) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (chatAsync.hasError && !chatAsync.hasValue) {
+      return const Scaffold(
+        body: Center(child: Text('Не удалось загрузить чат')),
+      );
+    }
+
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
@@ -674,7 +430,8 @@ class _ChatScreenState extends State<ChatScreen> {
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: _loadHistory,
+        onRefresh: () =>
+            ref.read(chatProvider(widget.roomId).notifier).refreshHistory(),
         child: ValueListenableBuilder<double>(
           valueListenable: appFontSizeNotifier,
           builder: (context, fontSizeFactor, child) {
@@ -695,10 +452,10 @@ class _ChatScreenState extends State<ChatScreen> {
 
             return Chat(
               chatController: _chatController,
-              currentUserId: _currentUserId!,
+              currentUserId: myUserId,
               onMessageSend: _handleSendPressed,
               resolveUser: (String id) async {
-                final name = await _authService.getUserName(id);
+                final name = await ref.read(userRepositoryProvider).getUserName(id);
                 return User(id: id, name: name);
               },
               theme: chatTheme,
@@ -774,140 +531,35 @@ class _ChatScreenState extends State<ChatScreen> {
                       required isSentByMe,
                       groupStatus,
                     }) {
+                      final task = Task.fromJson(message.metadata ?? {});
                       return TaskCard(
-                        // TODO(chat-provider): временная адаптация к типизированному
-                        // TaskCard, пока ChatScreen целиком не переведён на
-                        // chat_provider (следующий коммит) — сама эта логика ниже
-                        // ещё работает поверх сырых Map/message.metadata.
-                        task: Task.fromJson(message.metadata ?? {}),
-                        currentUserId: _currentUserId!,
-                        onAccept: (taskId) async {
-                          final meta = Map<String, dynamic>.from(
-                            message.metadata ?? {},
-                          );
-                          List<String> acceptedBy = [];
-                          final rawAccepted = meta['accepted_by'];
-                          if (rawAccepted is String) {
-                            try {
-                              final decoded = jsonDecode(rawAccepted);
-                              if (decoded is List)
-                                acceptedBy = decoded
-                                    .map<String>((e) => e.toString())
-                                    .toList();
-                            } catch (_) {}
-                          } else if (rawAccepted is List) {
-                            acceptedBy = rawAccepted
-                                .map<String>((e) => e.toString())
-                                .toList();
-                          }
-                          if (acceptedBy.contains(_currentUserId)) return;
-                          acceptedBy.add(_currentUserId!);
-                          String newStatus = meta['status'] ?? 'todo';
-                          if (acceptedBy.length >= 2) newStatus = 'in_progress';
-                          final updatedMeta = Map<String, dynamic>.from(meta);
-                          updatedMeta['accepted_by'] = acceptedBy;
-                          updatedMeta['status'] = newStatus;
-                          _chatController.updateMessage(
-                            message,
-                            message.copyWith(metadata: updatedMeta),
-                          );
-                          try {
-                            await _authService.patch('/tasks/$taskId', {
-                              'status': newStatus,
-                              'accepted_by': acceptedBy,
-                            });
-                          } catch (e) {
-                            debugPrint('onAccept error: $e');
-                            _notifyActionFailed('Не удалось принять задачу');
-                          }
-                          WebSocketService().send(<String, dynamic>{
-                            'type': 'task_update',
-                            'room': widget.roomId,
-                            'sender': _currentUserId,
-                            'data': jsonEncode({
-                              'task_id': taskId,
-                              'status': newStatus,
-                              'accepted_by': acceptedBy,
-                            }),
-                          });
-                        },
-                        onStatusChange: (taskId, newStatus) async {
-                          final updatedMeta = Map<String, dynamic>.from(
-                            message.metadata ?? {},
-                          );
-                          updatedMeta['status'] = newStatus;
-                          _chatController.updateMessage(
-                            message,
-                            message.copyWith(metadata: updatedMeta),
-                          );
-                          try {
-                            await _authService.patch('/tasks/$taskId', {
-                              'status': newStatus,
-                            });
-                          } catch (e) {
-                            debugPrint('onStatusChange error: $e');
-                            _notifyActionFailed(
-                              'Не удалось обновить статус задачи',
-                            );
-                          }
-                          WebSocketService().send(<String, dynamic>{
-                            'type': 'task_update',
-                            'room': widget.roomId,
-                            'sender': _currentUserId,
-                            'data': jsonEncode({
-                              'task_id': taskId,
-                              'status': newStatus,
-                            }),
-                          });
-                        },
-                        onDelete: (taskId) async {
-                          try {
-                            await _authService.delete('/tasks/$taskId');
-                            _chatController.removeMessage(message);
-                            WebSocketService().send(<String, dynamic>{
-                              'type': 'task_deleted',
-                              'task_id': taskId,
-                              'room': widget.roomId,
-                            });
-                          } catch (e) {
-                            debugPrint('onDelete error: $e');
-                            _notifyActionFailed('Не удалось удалить задачу');
-                          }
-                        },
-                        onSubtasksUpdated: (taskId, updatedSubtasks) async {
-                          final subtaskMaps = updatedSubtasks
-                              .map((s) => s.toJson())
-                              .toList();
-                          final updatedMeta = Map<String, dynamic>.from(
-                            message.metadata ?? {},
-                          );
-                          updatedMeta['subtasks'] = subtaskMaps;
-                          _chatController.updateMessage(
-                            message,
-                            message.copyWith(metadata: updatedMeta),
-                          );
-                          try {
-                            await _authService.patch(
-                              '/tasks/$taskId',
-                              updatedMeta,
-                            );
-                          } catch (e) {
-                            debugPrint('onSubtasksUpdated error: $e');
-                            _notifyActionFailed(
-                              'Не удалось обновить подзадачи',
-                            );
-                          }
-                          WebSocketService().send(<String, dynamic>{
-                            'type': 'task_update',
-                            'room': widget.roomId,
-                            'sender': _currentUserId,
-                            'data': jsonEncode({
-                              'task_id': taskId,
-                              'subtasks': subtaskMaps,
-                            }),
-                          });
-                        },
-                        onEdit: (taskId) => _openEditTaskPanel(message),
+                        task: task,
+                        currentUserId: myUserId,
+                        onAccept: (_) => _runTaskAction(
+                          () => ref
+                              .read(chatProvider(widget.roomId).notifier)
+                              .acceptTask(task),
+                          failureMessage: 'Не удалось принять задачу',
+                        ),
+                        onStatusChange: (taskId, newStatus) => _runTaskAction(
+                          () => ref
+                              .read(chatProvider(widget.roomId).notifier)
+                              .changeTaskStatus(taskId, newStatus),
+                          failureMessage: 'Не удалось обновить статус задачи',
+                        ),
+                        onDelete: (taskId) => _runTaskAction(
+                          () => ref
+                              .read(chatProvider(widget.roomId).notifier)
+                              .deleteTask(taskId),
+                          failureMessage: 'Не удалось удалить задачу',
+                        ),
+                        onSubtasksUpdated: (_, updated) => _runTaskAction(
+                          () => ref
+                              .read(chatProvider(widget.roomId).notifier)
+                              .updateSubtasks(task, updated),
+                          failureMessage: 'Не удалось обновить подзадачи',
+                        ),
+                        onEdit: (_) => _openEditTaskPanel(task),
                       );
                     },
               ),
