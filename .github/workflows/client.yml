@@ -25,8 +25,12 @@ jobs:
       - name: flutter pub get
         run: flutter pub get
 
+      # --no-fatal-infos: only fail on real errors/warnings. The codebase
+      # has ~80 pre-existing info-level lints (mostly withOpacity
+      # deprecations) that predate this workflow - still printed in the
+      # log, just not gating, same reasoning as dart format below.
       - name: flutter analyze
-        run: flutter analyze
+        run: flutter analyze --no-fatal-infos
 
       - name: flutter test
         run: flutter test
