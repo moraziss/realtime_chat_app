@@ -1,140 +1,31 @@
-import 'dart:convert';
-import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
-import 'package:http/http.dart' as http;
-import '../services/auth_service.dart';
+import '../models/room.dart';
+import '../models/stats.dart';
+import '../models/user_profile.dart';
+import '../providers/core_providers.dart';
+import '../providers/current_user_providers.dart';
+import '../providers/rooms_provider.dart';
+import '../repositories/api_exception.dart';
 import '../services/websocket_service.dart';
 import '../widgets/app_drawer.dart';
 
-class RoomsScreen extends StatefulWidget {
+class RoomsScreen extends ConsumerWidget {
   const RoomsScreen({super.key});
 
-  @override
-  State<RoomsScreen> createState() => _RoomsScreenState();
-}
-
-class _RoomsScreenState extends State<RoomsScreen> {
-  final _authService = AuthService();
-  List<dynamic> _rooms = [];
-  bool _isLoading = true;
-
-  String _userName = "Загрузка...";
-  String _userEmail = "...";
-
-  int _tasksInProgress = 0;
-  int _tasksDone = 0;
-  int _tasksTodo = 0;
-
-  StreamSubscription? _wsSubscription;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadAllData();
-
-    WebSocketService().connect();
-
-    _wsSubscription = WebSocketService().stream.listen((message) {
-      if (!mounted) return;
-
-      if (message['type'] == 'message' ||
-          message['type'] == 'read' ||
-          message['type'] == 'task_created') {
-        _loadRooms();
-        _loadStats();
-
-        if (message['type'] == 'message' && message['room'] != null) {
-          final roomId = message['room'].toString();
-          final index = _rooms.indexWhere(
-            (r) =>
-                r['id']?.toString() == roomId ||
-                r['room_id']?.toString() == roomId,
-          );
-
-          if (index > 0) {
-            setState(() {
-              final room = _rooms.removeAt(index);
-              _rooms.insert(0, room);
-            });
-          }
-        }
-      }
-    });
+  Future<void> _refreshAll(WidgetRef ref) {
+    return Future.wait([
+      ref.read(roomsProvider.notifier).refresh(),
+      ref.read(taskStatsProvider.notifier).refresh(),
+      ref.read(meProvider.notifier).refresh(),
+    ]);
   }
 
-  @override
-  void dispose() {
-    _wsSubscription?.cancel();
-    super.dispose();
-  }
+  void _showUsersList(BuildContext context, WidgetRef ref) {
+    final myEmail = ref.read(meProvider).valueOrNull?.email ?? '';
 
-  Future<void> _loadAllData() async {
-    await Future.wait([_loadUserProfile(), _loadRooms(), _loadStats()]);
-  }
-
-  Future<void> _loadUserProfile() async {
-    final savedEmail = await _authService.getUserEmail();
-    if (mounted && savedEmail != null) {
-      setState(() => _userEmail = savedEmail);
-    }
-
-    try {
-      final res = await _authService.get('/users/me');
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        if (mounted) {
-          setState(() {
-            _userName = data['name'] ?? "Без имени";
-            if (data['email'] != null) _userEmail = data['email'];
-          });
-        }
-      }
-    } catch (e) {
-      debugPrint("Ошибка профиля: $e");
-    }
-  }
-
-  Future<void> _loadRooms() async {
-    try {
-      final res = await _authService.get('/rooms');
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        if (mounted) {
-          setState(() {
-            _rooms = data['data'] ?? [];
-            _isLoading = false;
-          });
-        }
-      }
-    } catch (e) {
-      debugPrint('Ошибка загрузки комнат: $e');
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _loadStats() async {
-    try {
-      final res = await _authService.get('/users/me/stats');
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        if (mounted) {
-          setState(() {
-            final int total = data['total'] ?? 0;
-            _tasksInProgress = data['in_progress'] ?? 0;
-            _tasksDone = data['done'] ?? 0;
-            _tasksTodo = total - _tasksInProgress - _tasksDone;
-            if (_tasksTodo < 0) _tasksTodo = 0;
-          });
-        }
-      }
-    } catch (e) {
-      debugPrint('Ошибка загрузки статистики: $e');
-    }
-  }
-
-  void _showUsersList() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -151,25 +42,21 @@ class _RoomsScreenState extends State<RoomsScreen> {
             maxChildSize: 0.95,
             expand: false,
             builder: (context, scrollController) {
-              return FutureBuilder<dynamic>(
-                future: _authService.get('/users'),
+              return FutureBuilder<List<UserProfile>>(
+                future: ref.read(userRepositoryProvider).getUsers(),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const Center(child: CircularProgressIndicator());
                   }
 
-                  if (snapshot.hasError ||
-                      !snapshot.hasData ||
-                      snapshot.data!.statusCode != 200) {
+                  if (snapshot.hasError || !snapshot.hasData) {
                     return const Center(
                       child: Text('Ошибка загрузки пользователей'),
                     );
                   }
 
-                  final data = jsonDecode(snapshot.data!.body);
-                  final users = (data['data'] as List?) ?? [];
-                  final otherUsers = users
-                      .where((u) => u['email'] != _userEmail)
+                  final otherUsers = snapshot.data!
+                      .where((u) => u.email != myEmail)
                       .toList();
 
                   if (otherUsers.isEmpty) {
@@ -220,11 +107,9 @@ class _RoomsScreenState extends State<RoomsScreen> {
                                       context,
                                     ).colorScheme.primary.withOpacity(0.1),
                                     child: Text(
-                                      user['name']
-                                              ?.toString()
-                                              .substring(0, 1)
-                                              .toUpperCase() ??
-                                          '?',
+                                      user.name.isNotEmpty
+                                          ? user.name.substring(0, 1).toUpperCase()
+                                          : '?',
                                       style: TextStyle(
                                         color: Theme.of(
                                           context,
@@ -234,25 +119,20 @@ class _RoomsScreenState extends State<RoomsScreen> {
                                     ),
                                   ),
                                   title: Text(
-                                    user['name'] ?? 'Без имени',
+                                    user.name.isNotEmpty ? user.name : 'Без имени',
                                     style: const TextStyle(
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
-                                  subtitle: Text(user['email'] ?? ''),
+                                  subtitle: Text(user.email),
                                   onTap: () async {
                                     Navigator.pop(context);
                                     try {
-                                      final targetId = user['id'].toString();
-                                      final res = await _authService
-                                          .post('/rooms', {
-                                            'target_user_id': targetId,
-                                            'friend_id': targetId,
-                                          });
-                                      if (res.statusCode == 200 ||
-                                          res.statusCode == 201) {
-                                        _loadRooms();
-                                      } else if (mounted) {
+                                      await ref
+                                          .read(roomsProvider.notifier)
+                                          .createRoom(user.id);
+                                    } on ApiException catch (_) {
+                                      if (context.mounted) {
                                         ScaffoldMessenger.of(
                                           context,
                                         ).showSnackBar(
@@ -265,7 +145,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
                                       }
                                     } catch (e) {
                                       debugPrint('Ошибка создания чата: $e');
-                                      if (mounted) {
+                                      if (context.mounted) {
                                         ScaffoldMessenger.of(
                                           context,
                                         ).showSnackBar(
@@ -296,20 +176,23 @@ class _RoomsScreenState extends State<RoomsScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
 
+    final roomsAsync = ref.watch(roomsProvider);
+    final stats = ref.watch(taskStatsProvider).valueOrNull ?? const TaskStats();
+
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      drawer: AppDrawer(userName: _userName, userEmail: _userEmail),
+      drawer: const AppDrawer(),
       body: Column(
         children: [
-          _buildConnectionBanner(colorScheme),
+          _buildConnectionBanner(ref, colorScheme),
           Expanded(
             child: RefreshIndicator(
-              onRefresh: _loadAllData,
+              onRefresh: () => _refreshAll(ref),
               child: CustomScrollView(
                 physics: const BouncingScrollPhysics(),
                 slivers: [
@@ -414,7 +297,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
                                         child: _buildStatCard(
                                           context,
                                           "В работе",
-                                          _tasksInProgress,
+                                          stats.inProgress,
                                           Icons.auto_mode_rounded,
                                           Colors.orangeAccent,
                                         ),
@@ -424,7 +307,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
                                         child: _buildStatCard(
                                           context,
                                           "Готово",
-                                          _tasksDone,
+                                          stats.done,
                                           Icons.task_alt_rounded,
                                           Colors.greenAccent,
                                         ),
@@ -434,7 +317,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
                                         child: _buildStatCard(
                                           context,
                                           "Ожидают",
-                                          _tasksTodo,
+                                          stats.todo,
                                           Icons.timer_outlined,
                                           Colors.lightBlueAccent,
                                         ),
@@ -460,54 +343,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
                       ),
                     ),
                   ),
-                  _isLoading
-                      ? const SliverFillRemaining(
-                          child: Center(child: CircularProgressIndicator()),
-                        )
-                      : _rooms.isEmpty
-                      ? SliverFillRemaining(
-                          child: Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.chat_bubble_outline_rounded,
-                                  size: 60,
-                                  color: colorScheme.outline.withOpacity(0.5),
-                                ),
-                                const SizedBox(height: 16),
-                                Text(
-                                  "Нет доступных чатов",
-                                  style: TextStyle(
-                                    color: colorScheme.outline,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        )
-                      : SliverPadding(
-                          padding: const EdgeInsets.symmetric(horizontal: 10),
-                          sliver: SliverList(
-                            delegate: SliverChildBuilderDelegate((
-                              context,
-                              index,
-                            ) {
-                              final room = _rooms[index];
-                              return AnimationConfiguration.staggeredList(
-                                position: index,
-                                duration: const Duration(milliseconds: 400),
-                                child: SlideAnimation(
-                                  verticalOffset: 30.0,
-                                  child: FadeInAnimation(
-                                    child: _buildRealChatTile(context, room),
-                                  ),
-                                ),
-                              );
-                            }, childCount: _rooms.length),
-                          ),
-                        ),
+                  ..._buildRoomsSlivers(context, ref, colorScheme, roomsAsync),
                   const SliverToBoxAdapter(child: SizedBox(height: 100)),
                 ],
               ),
@@ -516,7 +352,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showUsersList,
+        onPressed: () => _showUsersList(context, ref),
         backgroundColor: colorScheme.primary,
         elevation: 4,
         highlightElevation: 8,
@@ -529,10 +365,73 @@ class _RoomsScreenState extends State<RoomsScreen> {
     );
   }
 
-  Widget _buildConnectionBanner(ColorScheme colorScheme) {
+  List<Widget> _buildRoomsSlivers(
+    BuildContext context,
+    WidgetRef ref,
+    ColorScheme colorScheme,
+    AsyncValue<List<Room>> roomsAsync,
+  ) {
+    if (roomsAsync.isLoading && !roomsAsync.hasValue) {
+      return const [
+        SliverFillRemaining(child: Center(child: CircularProgressIndicator())),
+      ];
+    }
+
+    final rooms = roomsAsync.valueOrNull ?? const [];
+    if (rooms.isEmpty) {
+      return [
+        SliverFillRemaining(
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.chat_bubble_outline_rounded,
+                  size: 60,
+                  color: colorScheme.outline.withOpacity(0.5),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  "Нет доступных чатов",
+                  style: TextStyle(
+                    color: colorScheme.outline,
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ];
+    }
+
+    return [
+      SliverPadding(
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        sliver: SliverList(
+          delegate: SliverChildBuilderDelegate((context, index) {
+            final room = rooms[index];
+            return AnimationConfiguration.staggeredList(
+              position: index,
+              duration: const Duration(milliseconds: 400),
+              child: SlideAnimation(
+                verticalOffset: 30.0,
+                child: FadeInAnimation(
+                  child: _buildRealChatTile(context, room, ref),
+                ),
+              ),
+            );
+          }, childCount: rooms.length),
+        ),
+      ),
+    ];
+  }
+
+  Widget _buildConnectionBanner(WidgetRef ref, ColorScheme colorScheme) {
+    final ws = ref.watch(webSocketServiceProvider);
     return StreamBuilder<ConnectionStatus>(
-      stream: WebSocketService().connectionStatus,
-      initialData: WebSocketService().status,
+      stream: ws.connectionStatus,
+      initialData: ws.status,
       builder: (context, snapshot) {
         final isUp = snapshot.data == ConnectionStatus.connected;
         return AnimatedSize(
@@ -626,21 +525,17 @@ class _RoomsScreenState extends State<RoomsScreen> {
     );
   }
 
-  Widget _buildRealChatTile(BuildContext context, dynamic room) {
+  Widget _buildRealChatTile(BuildContext context, Room room, WidgetRef ref) {
     final colorScheme = Theme.of(context).colorScheme;
-    final String roomId =
-        room['id']?.toString() ?? room['room_id']?.toString() ?? '';
-    final String roomName = room['name'] ?? 'Чат без названия';
-    final int unreadCount = room['unread_count'] ?? 0;
-    final String lastMessage =
-        room['last_message']?.toString().isNotEmpty == true
-        ? room['last_message'].toString()
+    final roomName = room.name.isNotEmpty ? room.name : 'Чат без названия';
+    final lastMessage = room.lastMessage.isNotEmpty
+        ? room.lastMessage
         : "Нажмите, чтобы начать общение";
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: unreadCount > 0
+        color: room.unreadCount > 0
             ? colorScheme.primary.withOpacity(0.03)
             : Colors.transparent,
         borderRadius: BorderRadius.circular(20),
@@ -648,9 +543,9 @@ class _RoomsScreenState extends State<RoomsScreen> {
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         onTap: () async {
-          if (roomId.isNotEmpty) {
-            await context.push('/chat/$roomId');
-            _loadRooms();
+          if (room.id.isNotEmpty) {
+            await context.push('/chat/${room.id}');
+            ref.read(roomsProvider.notifier).refresh();
           }
         },
         leading: Container(
@@ -686,7 +581,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
                 roomName,
                 style: TextStyle(
                   color: colorScheme.onSurface,
-                  fontWeight: unreadCount > 0
+                  fontWeight: room.unreadCount > 0
                       ? FontWeight.w900
                       : FontWeight.w700,
                   fontSize: 17,
@@ -695,7 +590,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            if (unreadCount > 0)
+            if (room.unreadCount > 0)
               Container(
                 margin: const EdgeInsets.only(left: 8),
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -704,7 +599,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
-                  unreadCount.toString(),
+                  room.unreadCount.toString(),
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 10,
@@ -719,10 +614,10 @@ class _RoomsScreenState extends State<RoomsScreen> {
           child: Text(
             lastMessage,
             style: TextStyle(
-              color: unreadCount > 0
+              color: room.unreadCount > 0
                   ? colorScheme.onSurface
                   : colorScheme.onSurfaceVariant.withOpacity(0.7),
-              fontWeight: unreadCount > 0 ? FontWeight.w600 : FontWeight.w400,
+              fontWeight: room.unreadCount > 0 ? FontWeight.w600 : FontWeight.w400,
               fontSize: 14,
             ),
             maxLines: 1,

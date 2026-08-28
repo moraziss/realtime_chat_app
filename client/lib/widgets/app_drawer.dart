@@ -1,44 +1,27 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../services/auth_service.dart';
+import '../providers/core_providers.dart';
+import '../providers/current_user_providers.dart';
 
-class AppDrawer extends StatefulWidget {
-  final String userName;
-  final String userEmail;
-
-  const AppDrawer({super.key, required this.userName, required this.userEmail});
+class AppDrawer extends ConsumerWidget {
+  const AppDrawer({super.key});
 
   @override
-  State<AppDrawer> createState() => _AppDrawerState();
-}
-
-class _AppDrawerState extends State<AppDrawer> {
-  final _authService = AuthService();
-  String? _avatarPath;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadAvatar();
-  }
-
-  Future<void> _loadAvatar() async {
-    final profile = await _authService.getLocalProfile();
-    if (mounted) {
-      setState(() {
-        _avatarPath = profile['avatar'];
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final currentPath = GoRouterState.of(context).uri.path;
 
-    final String initial = widget.userName.isNotEmpty ? widget.userName.substring(0, 1).toUpperCase() : '?';
+    // meProvider уже общий на всё приложение (используется и RoomsScreen) —
+    // здесь просто читаем текущее значение, без отдельного похода в сеть,
+    // который раньше делал AppDrawer сам через getLocalProfile().
+    final profile = ref.watch(meProvider).valueOrNull;
+    final userName = profile?.name ?? '...';
+    final userEmail = profile?.email ?? '';
+    final avatarUrl = profile?.avatarUrl;
+
+    final String initial = userName.isNotEmpty ? userName.substring(0, 1).toUpperCase() : '?';
 
     return Drawer(
       child: SafeArea(
@@ -74,12 +57,10 @@ class _AppDrawerState extends State<AppDrawer> {
                       CircleAvatar(
                         radius: 32,
                         backgroundColor: Colors.white,
-                        backgroundImage: (_avatarPath != null && _avatarPath!.isNotEmpty)
-                            ? (_avatarPath!.startsWith('http')
-                                ? NetworkImage(_avatarPath!)
-                                : FileImage(File(_avatarPath!)) as ImageProvider)
+                        backgroundImage: (avatarUrl != null && avatarUrl.isNotEmpty)
+                            ? NetworkImage(avatarUrl)
                             : null,
-                        child: (_avatarPath == null || _avatarPath!.isEmpty)
+                        child: (avatarUrl == null || avatarUrl.isEmpty)
                             ? Text(
                                 initial,
                                 style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: colorScheme.primary),
@@ -88,14 +69,14 @@ class _AppDrawerState extends State<AppDrawer> {
                       ),
                       const SizedBox(height: 14),
                       Text(
-                        widget.userName,
+                        userName,
                         style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: Colors.white),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        widget.userEmail,
+                        userEmail,
                         style: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: 13),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -124,7 +105,7 @@ class _AppDrawerState extends State<AppDrawer> {
                 leading: const Icon(Icons.logout_rounded, color: Colors.redAccent),
                 title: const Text('Выйти', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w700)),
                 onTap: () async {
-                  await _authService.logout();
+                  await ref.read(authServiceProvider).logout();
                   if (context.mounted) context.go('/login');
                 },
               ),
