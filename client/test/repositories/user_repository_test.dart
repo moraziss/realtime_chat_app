@@ -54,4 +54,34 @@ void main() {
 
     expect(name, 'unknown-id');
   });
+
+  test('getAvatarUrl shares the same cache as getUserName', () async {
+    when(() => auth.get('/users')).thenAnswer(
+      (_) async => http.Response(
+        '{"data":[{"id":"u3","name":"Carl","email":"c@x.com","avatar_url":"/uploads/carl.png"}]}',
+        200,
+      ),
+    );
+
+    final name = await repo.getUserName('u3');
+    final avatar = await repo.getAvatarUrl('u3');
+
+    expect(name, 'Carl');
+    expect(avatar, '/uploads/carl.png');
+    // Both lookups should share one cache fill, not one GET per method.
+    verify(() => auth.get('/users')).called(1);
+  });
+
+  test('getAvatarUrl returns null when the user has no avatar set', () async {
+    when(() => auth.get('/users')).thenAnswer(
+      (_) async => http.Response(
+        '{"data":[{"id":"u4","name":"Dana","email":"d@x.com"}]}',
+        200,
+      ),
+    );
+
+    final avatar = await repo.getAvatarUrl('u4');
+
+    expect(avatar, isNull);
+  });
 }

@@ -1,15 +1,15 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_chat_core/flutter_chat_core.dart';
-// flutter_chat_ui exports its own ChatMessage widget, which collides with
-// our domain model of the same name — we only need the Chat widget from
-// this package, not its ChatMessage.
-import 'package:flutter_chat_ui/flutter_chat_ui.dart' hide ChatMessage;
+import 'package:flutter_chat_ui/flutter_chat_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../models/chat_message.dart';
+// flutter_chat_ui exports its own ChatMessage widget (used below for
+// chatMessageBuilder), which collides with our domain model of the same
+// name — the domain model gets a prefix here instead.
+import '../models/chat_message.dart' as domain;
 import '../models/task.dart';
 import '../providers/chat_provider.dart';
 import '../providers/core_providers.dart';
@@ -83,13 +83,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
   }
 
-  Message _toUiMessage(ChatMessage m, String myUserId) {
+  Message _toUiMessage(domain.ChatMessage m, String myUserId) {
     final isMe = m.authorId == myUserId;
     final status = isMe ? (m.isRead ? MessageStatus.seen : MessageStatus.sent) : null;
     final baseUrl = ref.read(authServiceProvider).currentBaseUrl;
 
     switch (m.kind) {
-      case ChatMessageKind.task:
+      case domain.ChatMessageKind.task:
         return Message.custom(
           id: m.id,
           authorId: m.authorId,
@@ -97,7 +97,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           status: status,
           metadata: m.task!.toJson(),
         );
-      case ChatMessageKind.image:
+      case domain.ChatMessageKind.image:
         return Message.image(
           id: m.id,
           authorId: m.authorId,
@@ -105,7 +105,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           status: status,
           source: '$baseUrl${m.fileUrl}',
         );
-      case ChatMessageKind.file:
+      case domain.ChatMessageKind.file:
         return Message.file(
           id: m.id,
           authorId: m.authorId,
@@ -115,7 +115,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           size: m.fileSize ?? 0,
           source: '$baseUrl${m.fileUrl}',
         );
-      case ChatMessageKind.text:
+      case domain.ChatMessageKind.text:
         return Message.text(
           id: m.id,
           authorId: m.authorId,
@@ -124,6 +124,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           text: m.text ?? '',
         );
     }
+  }
+
+  /// avatar_url приходит с сервера как относительный путь (/uploads/...).
+  String? _resolveMediaUrl(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    if (raw.startsWith('http')) return raw;
+    return '${ref.read(authServiceProvider).currentBaseUrl}$raw';
   }
 
   Future<void> _runTaskAction(
@@ -455,11 +462,46 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               currentUserId: myUserId,
               onMessageSend: _handleSendPressed,
               resolveUser: (String id) async {
-                final name = await ref.read(userRepositoryProvider).getUserName(id);
-                return User(id: id, name: name);
+                final userRepo = ref.read(userRepositoryProvider);
+                final name = await userRepo.getUserName(id);
+                final rawAvatar = await userRepo.getAvatarUrl(id);
+                final avatarUrl = _resolveMediaUrl(rawAvatar);
+                return User(id: id, name: name, imageSource: avatarUrl);
               },
               theme: chatTheme,
               builders: Builders(
+                // Аватар слева только для чужих сообщений — как в
+                // Telegram/WhatsApp, свои сообщения без аватара.
+                chatMessageBuilder:
+                    (
+                      context,
+                      message,
+                      index,
+                      animation,
+                      child, {
+                      isRemoved,
+                      required isSentByMe,
+                      groupStatus,
+                    }) {
+                      return ChatMessage(
+                        message: message,
+                        index: index,
+                        animation: animation,
+                        isRemoved: isRemoved,
+                        groupStatus: groupStatus,
+                        leadingWidget: !isSentByMe
+                            ? Padding(
+                                padding: const EdgeInsets.only(
+                                  right: 8,
+                                  bottom: 4,
+                                ),
+                                child: Avatar(userId: message.authorId, size: 28),
+                              )
+                            : null,
+                        child: child,
+                      );
+                    },
+                composerBuilder: (context) => const Composer(sendOnEnter: true),
                 imageMessageBuilder:
                     (
                       context,
@@ -479,11 +521,40 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                           ),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(12),
-                            child: Image.network(
-                              message.source,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) =>
-                                  const Icon(Icons.broken_image, size: 50),
+                            child: Stack(
+                              alignment: Alignment.bottomRight,
+                              children: [
+                                Image.network(
+                                  message.source,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) =>
+                                      const Icon(Icons.broken_image, size: 50),
+                                ),
+                                if (isSentByMe)
+                                  Padding(
+                                    padding: const EdgeInsets.all(6),
+                                    child: DecoratedBox(
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withOpacity(0.45),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                          vertical: 2,
+                                        ),
+                                        child: TimeAndStatus(
+                                          time: message.createdAt,
+                                          status: message.status,
+                                          textStyle: const TextStyle(
+                                            fontSize: 10,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
                             ),
                           ),
                         ),
@@ -516,6 +587,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                             '${((message.size ?? 0) / 1024).toStringAsFixed(1)} KB',
                             style: TextStyle(fontSize: 13 * fontSizeFactor),
                           ),
+                          trailing: isSentByMe
+                              ? TimeAndStatus(
+                                  time: message.createdAt,
+                                  status: message.status,
+                                  textStyle: TextStyle(
+                                    fontSize: 10,
+                                    color: isDark
+                                        ? Colors.white54
+                                        : Colors.black45,
+                                  ),
+                                )
+                              : null,
                           onTap: () async {
                             final uri = Uri.parse(message.source);
                             if (await canLaunchUrl(uri)) await launchUrl(uri);
@@ -532,34 +615,55 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       groupStatus,
                     }) {
                       final task = Task.fromJson(message.metadata ?? {});
-                      return TaskCard(
-                        task: task,
-                        currentUserId: myUserId,
-                        onAccept: (_) => _runTaskAction(
-                          () => ref
-                              .read(chatProvider(widget.roomId).notifier)
-                              .acceptTask(task),
-                          failureMessage: 'Не удалось принять задачу',
-                        ),
-                        onStatusChange: (taskId, newStatus) => _runTaskAction(
-                          () => ref
-                              .read(chatProvider(widget.roomId).notifier)
-                              .changeTaskStatus(taskId, newStatus),
-                          failureMessage: 'Не удалось обновить статус задачи',
-                        ),
-                        onDelete: (taskId) => _runTaskAction(
-                          () => ref
-                              .read(chatProvider(widget.roomId).notifier)
-                              .deleteTask(taskId),
-                          failureMessage: 'Не удалось удалить задачу',
-                        ),
-                        onSubtasksUpdated: (_, updated) => _runTaskAction(
-                          () => ref
-                              .read(chatProvider(widget.roomId).notifier)
-                              .updateSubtasks(task, updated),
-                          failureMessage: 'Не удалось обновить подзадачи',
-                        ),
-                        onEdit: (_) => _openEditTaskPanel(task),
+                      return Column(
+                        crossAxisAlignment: isSentByMe
+                            ? CrossAxisAlignment.end
+                            : CrossAxisAlignment.start,
+                        children: [
+                          TaskCard(
+                            task: task,
+                            currentUserId: myUserId,
+                            onAccept: (_) => _runTaskAction(
+                              () => ref
+                                  .read(chatProvider(widget.roomId).notifier)
+                                  .acceptTask(task),
+                              failureMessage: 'Не удалось принять задачу',
+                            ),
+                            onStatusChange: (taskId, newStatus) => _runTaskAction(
+                              () => ref
+                                  .read(chatProvider(widget.roomId).notifier)
+                                  .changeTaskStatus(taskId, newStatus),
+                              failureMessage: 'Не удалось обновить статус задачи',
+                            ),
+                            onDelete: (taskId) => _runTaskAction(
+                              () => ref
+                                  .read(chatProvider(widget.roomId).notifier)
+                                  .deleteTask(taskId),
+                              failureMessage: 'Не удалось удалить задачу',
+                            ),
+                            onSubtasksUpdated: (_, updated) => _runTaskAction(
+                              () => ref
+                                  .read(chatProvider(widget.roomId).notifier)
+                                  .updateSubtasks(task, updated),
+                              failureMessage: 'Не удалось обновить подзадачи',
+                            ),
+                            onEdit: (_) => _openEditTaskPanel(task),
+                          ),
+                          if (isSentByMe)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2, right: 4),
+                              child: TimeAndStatus(
+                                time: message.createdAt,
+                                status: message.status,
+                                textStyle: TextStyle(
+                                  fontSize: 10,
+                                  color: isDark
+                                      ? Colors.white54
+                                      : Colors.black45,
+                                ),
+                              ),
+                            ),
+                        ],
                       );
                     },
               ),

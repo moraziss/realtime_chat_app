@@ -8,9 +8,11 @@ class UserRepository {
   final AuthService _auth;
   UserRepository(this._auth);
 
-  // Кэш имени по id пользователя — раньше жил на AuthService (_users),
-  // перенесён сюда: это данные о справочнике пользователей, а не о сессии.
-  final Map<String, String> _nameCache = {};
+  // Кэш профиля по id пользователя (имя + аватар) — раньше на AuthService
+  // жил только кэш имени (_users), перенесён сюда и расширен: это данные о
+  // справочнике пользователей, а не о сессии. Используется и для чата
+  // (имя/аватар собеседника), и для "нового чата" в RoomsScreen.
+  final Map<String, UserProfile> _profileCache = {};
 
   Future<UserProfile> getMe() async {
     final res = await _auth.get('/users/me');
@@ -37,17 +39,33 @@ class UserRepository {
         .toList();
     for (final u in users) {
       if (u.id.isEmpty) continue;
-      _nameCache[u.id] = u.name.isNotEmpty ? u.name : (u.email.isNotEmpty ? u.email : u.id);
+      _profileCache[u.id] = u;
     }
     return users;
   }
 
-  Future<String> getUserName(String userId) async {
-    if (_nameCache.containsKey(userId)) return _nameCache[userId]!;
+  Future<UserProfile?> _resolveCachedProfile(String userId) async {
+    if (_profileCache.containsKey(userId)) return _profileCache[userId];
     try {
       await getUsers();
     } catch (_) {}
-    return _nameCache[userId] ?? userId;
+    return _profileCache[userId];
+  }
+
+  Future<String> getUserName(String userId) async {
+    final profile = await _resolveCachedProfile(userId);
+    if (profile == null) return userId;
+    if (profile.name.isNotEmpty) return profile.name;
+    if (profile.email.isNotEmpty) return profile.email;
+    return userId;
+  }
+
+  /// Аватар собеседника для чата — тот же кэш, что и getUserName. Значение
+  /// приходит с сервера как относительный путь и не резолвится здесь: это
+  /// решает вызывающая сторона, которая знает актуальный base URL.
+  Future<String?> getAvatarUrl(String userId) async {
+    final profile = await _resolveCachedProfile(userId);
+    return profile?.avatarUrl;
   }
 
   Future<TaskStats> getUserStats() async {
