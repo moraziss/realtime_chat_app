@@ -72,7 +72,7 @@ class RoomsScreen extends ConsumerWidget {
                         width: 40,
                         height: 5,
                         decoration: BoxDecoration(
-                          color: Colors.grey.withOpacity(0.3),
+                          color: Colors.grey.withValues(alpha: 0.3),
                           borderRadius: BorderRadius.circular(10),
                         ),
                       ),
@@ -105,7 +105,7 @@ class RoomsScreen extends ConsumerWidget {
                                     radius: 25,
                                     backgroundColor: Theme.of(
                                       context,
-                                    ).colorScheme.primary.withOpacity(0.1),
+                                    ).colorScheme.primary.withValues(alpha: 0.1),
                                     child: Text(
                                       user.name.isNotEmpty
                                           ? user.name.substring(0, 1).toUpperCase()
@@ -252,7 +252,7 @@ class RoomsScreen extends ConsumerWidget {
                               height: 200,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: Colors.white.withOpacity(0.05),
+                                color: Colors.white.withValues(alpha: 0.05),
                               ),
                             ),
                           ),
@@ -267,7 +267,7 @@ class RoomsScreen extends ConsumerWidget {
                                       Container(
                                         padding: const EdgeInsets.all(6),
                                         decoration: BoxDecoration(
-                                          color: Colors.white.withOpacity(0.2),
+                                          color: Colors.white.withValues(alpha: 0.2),
                                           borderRadius: BorderRadius.circular(
                                             8,
                                           ),
@@ -282,7 +282,7 @@ class RoomsScreen extends ConsumerWidget {
                                       Text(
                                         "Статистика задач",
                                         style: TextStyle(
-                                          color: Colors.white.withOpacity(0.9),
+                                          color: Colors.white.withValues(alpha: 0.9),
                                           fontSize: 16,
                                           fontWeight: FontWeight.w500,
                                           letterSpacing: 0.5,
@@ -388,7 +388,7 @@ class RoomsScreen extends ConsumerWidget {
                 Icon(
                   Icons.chat_bubble_outline_rounded,
                   size: 60,
-                  color: colorScheme.outline.withOpacity(0.5),
+                  color: colorScheme.outline.withValues(alpha: 0.5),
                 ),
                 const SizedBox(height: 16),
                 Text(
@@ -482,9 +482,9 @@ class RoomsScreen extends ConsumerWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(isDark ? 0.08 : 0.15),
+        color: Colors.white.withValues(alpha: isDark ? 0.08 : 0.15),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -498,7 +498,7 @@ class RoomsScreen extends ConsumerWidget {
                 height: 8,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: accentColor.withOpacity(0.5),
+                  color: accentColor.withValues(alpha: 0.5),
                 ),
               ),
             ],
@@ -515,7 +515,7 @@ class RoomsScreen extends ConsumerWidget {
           Text(
             title,
             style: TextStyle(
-              color: Colors.white.withOpacity(0.7),
+              color: Colors.white.withValues(alpha: 0.7),
               fontSize: 12,
               fontWeight: FontWeight.w600,
             ),
@@ -536,7 +536,7 @@ class RoomsScreen extends ConsumerWidget {
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
         color: room.unreadCount > 0
-            ? colorScheme.primary.withOpacity(0.03)
+            ? colorScheme.primary.withValues(alpha: 0.03)
             : Colors.transparent,
         borderRadius: BorderRadius.circular(20),
       ),
@@ -553,7 +553,7 @@ class RoomsScreen extends ConsumerWidget {
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color: colorScheme.primary.withOpacity(0.1),
+                color: colorScheme.primary.withValues(alpha: 0.1),
                 blurRadius: 10,
                 offset: const Offset(0, 4),
               ),
@@ -561,7 +561,7 @@ class RoomsScreen extends ConsumerWidget {
           ),
           child: CircleAvatar(
             radius: 30,
-            backgroundColor: colorScheme.primaryContainer.withOpacity(0.7),
+            backgroundColor: colorScheme.primaryContainer.withValues(alpha: 0.7),
             child: Text(
               roomName.isNotEmpty
                   ? roomName.substring(0, 1).toUpperCase()
@@ -616,7 +616,7 @@ class RoomsScreen extends ConsumerWidget {
             style: TextStyle(
               color: room.unreadCount > 0
                   ? colorScheme.onSurface
-                  : colorScheme.onSurfaceVariant.withOpacity(0.7),
+                  : colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
               fontWeight: room.unreadCount > 0 ? FontWeight.w600 : FontWeight.w400,
               fontSize: 14,
             ),
@@ -627,7 +627,7 @@ class RoomsScreen extends ConsumerWidget {
         trailing: Icon(
           Icons.arrow_forward_ios_rounded,
           size: 16,
-          color: colorScheme.outline.withOpacity(0.3),
+          color: colorScheme.outline.withValues(alpha: 0.3),
         ),
       ),
     );
