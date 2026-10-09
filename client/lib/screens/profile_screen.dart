@@ -262,7 +262,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Widget _statCard(String label, String value, IconData icon, Color color, ColorScheme colorScheme) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
-      decoration: BoxDecoration(color: color.withOpacity(0.08), borderRadius: BorderRadius.circular(16)),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(16)),
       child: Column(children: [Icon(icon, color: color, size: 20), const SizedBox(height: 4), FittedBox(fit: BoxFit.scaleDown, child: Text(value, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold))), Text(label, style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 10), textAlign: TextAlign.center)]),
     );
   }
@@ -289,10 +289,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     return Container(
       width: 80,
       decoration: BoxDecoration(
-        color: isUnlocked ? color.withOpacity(0.1) : lockedColor.withOpacity(0.05),
+        color: isUnlocked ? color.withValues(alpha: 0.1) : lockedColor.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: isUnlocked ? color.withOpacity(0.2) : lockedColor.withOpacity(0.1),
+          color: isUnlocked ? color.withValues(alpha: 0.2) : lockedColor.withValues(alpha: 0.1),
           width: 1,
         ),
       ),
@@ -301,7 +301,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         children: [
           Icon(
             icon,
-            color: isUnlocked ? color : lockedColor.withOpacity(0.4),
+            color: isUnlocked ? color : lockedColor.withValues(alpha: 0.4),
             size: 32,
           ),
           const SizedBox(height: 8),
@@ -309,7 +309,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             child: Text(
               label,
               style: TextStyle(
-                color: isUnlocked ? color : lockedColor.withOpacity(0.6),
+                color: isUnlocked ? color : lockedColor.withValues(alpha: 0.6),
                 fontSize: 10,
                 fontWeight: FontWeight.bold
               ),
@@ -320,7 +320,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           Icon(
             isUnlocked ? Icons.check_circle : Icons.lock,
             size: 12,
-            color: isUnlocked ? color : lockedColor.withOpacity(0.4)
+            color: isUnlocked ? color : lockedColor.withValues(alpha: 0.4)
           ),
         ],
       ),
@@ -350,11 +350,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final List<String> labels = List.generate(7, (i) => formatter.format(now.subtract(Duration(days: 6 - i))).replaceAll('.', ''));
     final maxVal = history.isEmpty ? 0 : history.reduce((a, b) => a > b ? a : b);
     return Container(
-      height: 160, padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: colorScheme.surfaceContainerHigh.withOpacity(0.5), borderRadius: BorderRadius.circular(20), border: Border.all(color: colorScheme.outlineVariant.withOpacity(0.3))),
+      height: 160, padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: colorScheme.surfaceContainerHigh.withValues(alpha: 0.5), borderRadius: BorderRadius.circular(20), border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.3))),
       child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, crossAxisAlignment: CrossAxisAlignment.end, children: List.generate(7, (i) {
         final count = history[i];
         final factor = maxVal > 0 ? (count / maxVal) : 0.0;
-        return Expanded(child: Column(mainAxisAlignment: MainAxisAlignment.end, children: [if (count > 0) Text(count.toString(), style: TextStyle(fontSize: 9, color: colorScheme.primary, fontWeight: FontWeight.bold)), const SizedBox(height: 4), Container(width: 20, height: (80 * factor).clamp(2, 80).toDouble(), decoration: BoxDecoration(color: colorScheme.primary.withOpacity(factor > 0 ? 1 : 0.2), borderRadius: BorderRadius.circular(4))), const SizedBox(height: 6), Text(labels[i], style: TextStyle(fontSize: 9, color: colorScheme.onSurfaceVariant))]));
+        return Expanded(child: Column(mainAxisAlignment: MainAxisAlignment.end, children: [if (count > 0) Text(count.toString(), style: TextStyle(fontSize: 9, color: colorScheme.primary, fontWeight: FontWeight.bold)), const SizedBox(height: 4), Container(width: 20, height: (80 * factor).clamp(2, 80).toDouble(), decoration: BoxDecoration(color: colorScheme.primary.withValues(alpha: factor > 0 ? 1 : 0.2), borderRadius: BorderRadius.circular(4))), const SizedBox(height: 6), Text(labels[i], style: TextStyle(fontSize: 9, color: colorScheme.onSurfaceVariant))]));
       })),
     );
   }
