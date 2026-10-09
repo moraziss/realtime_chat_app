@@ -69,8 +69,9 @@ class AuthService {
     final prefs = await SharedPreferences.getInstance();
     if (name != null) await prefs.setString(await _getPrefKey('name'), name);
     if (bio != null) await prefs.setString(await _getPrefKey('bio'), bio);
-    if (avatar != null)
+    if (avatar != null) {
       await prefs.setString(await _getPrefKey('avatar'), avatar);
+    }
   }
 
   // Получение данных профиля из локального кеша
