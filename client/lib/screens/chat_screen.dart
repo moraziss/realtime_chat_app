@@ -205,7 +205,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           final payload = Map<String, dynamic>.from(data);
           try {
             await ref.read(chatProvider(widget.roomId).notifier).createTask(payload);
-            if (mounted && Navigator.of(sheetContext).canPop()) {
+            if (sheetContext.mounted && Navigator.of(sheetContext).canPop()) {
               Navigator.of(sheetContext).pop();
             }
           } on ApiException catch (e) {
@@ -241,7 +241,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             debugPrint('edit task error: $e');
             _notifyActionFailed('Не удалось сохранить изменения');
           }
-          if (mounted && Navigator.of(sheetContext).canPop()) {
+          if (sheetContext.mounted && Navigator.of(sheetContext).canPop()) {
             Navigator.of(sheetContext).pop();
           }
         },
