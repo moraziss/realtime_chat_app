@@ -66,7 +66,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
         bottom: TabBar(
           controller: _tabController,
           labelColor: headerForeground,
-          unselectedLabelColor: headerForeground.withOpacity(0.6),
+          unselectedLabelColor: headerForeground.withValues(alpha: 0.6),
           indicatorColor: headerForeground,
           indicatorSize: TabBarIndicatorSize.label,
           tabs: const [
@@ -117,7 +117,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
                   Icon(
                     Icons.inbox_rounded,
                     size: 60,
-                    color: colorScheme.outline.withOpacity(0.5),
+                    color: colorScheme.outline.withValues(alpha: 0.5),
                   ),
                   const SizedBox(height: 16),
                   Text(
