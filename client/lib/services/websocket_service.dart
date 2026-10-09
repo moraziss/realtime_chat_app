@@ -71,8 +71,9 @@ class WebSocketService {
   }
 
   void _handleDisconnect() {
-    if (!_isConnected && _reconnectTimer != null)
+    if (!_isConnected && _reconnectTimer != null) {
       return; // переподключение уже запланировано
+    }
     _isConnected = false;
     _channel?.sink.close();
     _setStatus(ConnectionStatus.disconnected);
