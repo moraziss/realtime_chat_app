@@ -170,7 +170,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
               final payload = Map<String, dynamic>.from(taskData);
               try {
                 await ref.read(tasksProvider.notifier).edit(id, payload);
-                if (mounted) Navigator.of(sheetContext).pop();
+                if (sheetContext.mounted) Navigator.of(sheetContext).pop();
               } catch (e) {
                 debugPrint('edit task in TasksScreen error: $e');
                 if (mounted) {
