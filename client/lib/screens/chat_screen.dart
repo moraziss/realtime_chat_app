@@ -292,7 +292,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       leading: Container(
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.12),
+          color: color.withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Icon(icon, color: color),
@@ -317,7 +317,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   width: 40,
                   height: 5,
                   decoration: BoxDecoration(
-                    color: Colors.grey.withOpacity(0.3),
+                    color: Colors.grey.withValues(alpha: 0.3),
                     borderRadius: BorderRadius.circular(10),
                   ),
                 ),
@@ -402,7 +402,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           children: [
             CircleAvatar(
               radius: 18,
-              backgroundColor: headerForeground.withOpacity(0.2),
+              backgroundColor: headerForeground.withValues(alpha: 0.2),
               child: Text(
                 titleInitial,
                 style: TextStyle(
@@ -535,7 +535,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                                     padding: const EdgeInsets.all(6),
                                     child: DecoratedBox(
                                       decoration: BoxDecoration(
-                                        color: Colors.black.withOpacity(0.45),
+                                        color: Colors.black.withValues(alpha: 0.45),
                                         borderRadius: BorderRadius.circular(8),
                                       ),
                                       child: Padding(
