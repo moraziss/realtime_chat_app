@@ -234,7 +234,7 @@ class RoomsScreen extends ConsumerWidget {
                                 end: Alignment.bottomRight,
                                 colors: isDark
                                     ? [
-                                        colorScheme.surfaceVariant,
+                                        colorScheme.surfaceContainerHighest,
                                         colorScheme.surface,
                                       ]
                                     : [
