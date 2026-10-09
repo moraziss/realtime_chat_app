@@ -163,10 +163,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 scrollDirection: Axis.horizontal,
                 itemCount: colors.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 12),
+                separatorBuilder: (_, _) => const SizedBox(width: 12),
                 itemBuilder: (context, index) {
                   final color = colors[index];
-                  final isSelected = currentColor.value == color.value;
+                  final isSelected = currentColor.toARGB32() == color.toARGB32();
                   return GestureDetector(
                     onTap: () => appColorNotifier.setColor(color),
                     child: Container(
