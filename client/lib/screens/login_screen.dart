@@ -197,10 +197,11 @@ class _LoginScreenState extends State<LoginScreen> {
                             if (success) {
                               // Успешная регистрация -> Сразу логинимся
                               await _authService.login(email, password);
-                              if (mounted) {
-                                Navigator.pop(ctx);
-                                context.go('/rooms');
-                              }
+                              if (!mounted) return;
+                              if (ctx.mounted) Navigator.pop(ctx);
+                              // `context` is shadowed by the StatefulBuilder
+                              // parameter here; navigate with the screen's own.
+                              this.context.go('/rooms');
                             }
                           } catch (e) {
                             setStateDialog(() {
