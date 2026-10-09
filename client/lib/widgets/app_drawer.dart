@@ -56,7 +56,7 @@ class AppDrawer extends ConsumerWidget {
                     child: Container(
                       width: 100,
                       height: 100,
-                      decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withOpacity(0.08)),
+                      decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withValues(alpha: 0.08)),
                     ),
                   ),
                   Column(
@@ -85,7 +85,7 @@ class AppDrawer extends ConsumerWidget {
                       const SizedBox(height: 2),
                       Text(
                         userEmail,
-                        style: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: 13),
+                        style: TextStyle(color: Colors.white.withValues(alpha: 0.85), fontSize: 13),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -104,7 +104,7 @@ class AppDrawer extends ConsumerWidget {
             const Spacer(),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Divider(color: colorScheme.outlineVariant.withOpacity(0.4)),
+              child: Divider(color: colorScheme.outlineVariant.withValues(alpha: 0.4)),
             ),
 
             Padding(
@@ -122,7 +122,7 @@ class AppDrawer extends ConsumerWidget {
               padding: const EdgeInsets.only(bottom: 12, top: 4),
               child: Text(
                 'Realtime Chat · v1.3.0',
-                style: TextStyle(color: colorScheme.onSurfaceVariant.withOpacity(0.6), fontSize: 11, fontWeight: FontWeight.w600),
+                style: TextStyle(color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6), fontSize: 11, fontWeight: FontWeight.w600),
               ),
             ),
           ],
@@ -136,7 +136,7 @@ class AppDrawer extends ConsumerWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
       child: Material(
-        color: isActive ? colorScheme.primary.withOpacity(0.1) : Colors.transparent,
+        color: isActive ? colorScheme.primary.withValues(alpha: 0.1) : Colors.transparent,
         borderRadius: BorderRadius.circular(14),
         child: InkWell(
           borderRadius: BorderRadius.circular(14),
