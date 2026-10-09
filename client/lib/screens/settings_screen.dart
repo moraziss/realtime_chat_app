@@ -34,7 +34,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             colorScheme,
             children: [
               _buildColorPicker(),
-              Divider(indent: 16, endIndent: 16, color: colorScheme.outlineVariant.withOpacity(0.4)),
+              Divider(indent: 16, endIndent: 16, color: colorScheme.outlineVariant.withValues(alpha: 0.4)),
               _buildFontSizePicker(),
               SwitchListTile(
                 secondary: const Icon(Icons.dark_mode_rounded),
@@ -117,7 +117,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHigh.withOpacity(0.5),
+        color: colorScheme.surfaceContainerHigh.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(20),
       ),
       clipBehavior: Clip.antiAlias,
@@ -181,7 +181,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         boxShadow: [
                           if (isSelected)
                             BoxShadow(
-                              color: color.withOpacity(0.4),
+                              color: color.withValues(alpha: 0.4),
                               blurRadius: 8,
                               spreadRadius: 2,
                             )
