@@ -25,7 +25,7 @@ class AppThemeNotifier extends ValueNotifier<Color> {
   Future<void> setColor(Color newColor) async {
     value = newColor;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(_colorKey, newColor.value);
+    await prefs.setInt(_colorKey, newColor.toARGB32());
   }
 
   Future<void> reset() async {
