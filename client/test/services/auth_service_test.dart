@@ -241,8 +241,9 @@ void main() {
           getCallCount++;
           // Первый вызов (со старым токеном) получает 401, второй (после
           // обновления) — успех.
-          if (getCallCount == 1)
+          if (getCallCount == 1) {
             return http.Response('{"error":{"message":"unauthorized"}}', 401);
+          }
           return http.Response('{"data":[]}', 200);
         });
         when(
