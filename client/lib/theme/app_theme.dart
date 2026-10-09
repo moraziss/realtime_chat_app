@@ -61,10 +61,10 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         isDense: false,
-        fillColor: colorScheme.surfaceContainerHighest.withOpacity(isDark ? 0.35 : 0.6),
+        fillColor: colorScheme.surfaceContainerHighest.withValues(alpha: isDark ? 0.35 : 0.6),
         contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
         labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
-        hintStyle: TextStyle(color: colorScheme.onSurfaceVariant.withOpacity(0.7)),
+        hintStyle: TextStyle(color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7)),
         prefixIconColor: colorScheme.onSurfaceVariant,
         suffixIconColor: colorScheme.onSurfaceVariant,
         border: OutlineInputBorder(borderRadius: radiusM, borderSide: BorderSide.none),
@@ -88,7 +88,7 @@ class AppTheme {
         style: ElevatedButton.styleFrom(
           backgroundColor: colorScheme.primary,
           foregroundColor: colorScheme.onPrimary,
-          disabledBackgroundColor: colorScheme.onSurface.withOpacity(0.08),
+          disabledBackgroundColor: colorScheme.onSurface.withValues(alpha: 0.08),
           elevation: 0,
           padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
           minimumSize: const Size(0, 52),
@@ -167,7 +167,7 @@ class AppTheme {
       ),
 
       dividerTheme: DividerThemeData(
-        color: colorScheme.outlineVariant.withOpacity(0.4),
+        color: colorScheme.outlineVariant.withValues(alpha: 0.4),
         space: 1,
         thickness: 1,
       ),
@@ -184,7 +184,7 @@ class AppTheme {
         ),
         trackColor: WidgetStateProperty.resolveWith(
           (states) => states.contains(WidgetState.selected)
-              ? colorScheme.primary.withOpacity(0.35)
+              ? colorScheme.primary.withValues(alpha: 0.35)
               : null,
         ),
       ),
@@ -192,7 +192,7 @@ class AppTheme {
       sliderTheme: SliderThemeData(
         activeTrackColor: colorScheme.primary,
         thumbColor: colorScheme.primary,
-        overlayColor: colorScheme.primary.withOpacity(0.15),
+        overlayColor: colorScheme.primary.withValues(alpha: 0.15),
         inactiveTrackColor: colorScheme.surfaceContainerHighest,
       ),
 
@@ -224,8 +224,8 @@ class AppTheme {
 
       progressIndicatorTheme: ProgressIndicatorThemeData(
         color: colorScheme.primary,
-        circularTrackColor: colorScheme.primary.withOpacity(0.12),
-        linearTrackColor: colorScheme.primary.withOpacity(0.12),
+        circularTrackColor: colorScheme.primary.withValues(alpha: 0.12),
+        linearTrackColor: colorScheme.primary.withValues(alpha: 0.12),
       ),
 
       checkboxTheme: CheckboxThemeData(
