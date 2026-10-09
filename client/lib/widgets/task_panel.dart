@@ -146,7 +146,7 @@ class _TaskPanelState extends State<TaskPanel> {
               children: [
                 Expanded(
                   child: DropdownButtonFormField<String>(
-                    value: _priority,
+                    initialValue: _priority,
                     decoration: const InputDecoration(labelText: 'Важность'),
                     items: const [
                       DropdownMenuItem(value: 'low', child: Text('Низкий 🟢')),
