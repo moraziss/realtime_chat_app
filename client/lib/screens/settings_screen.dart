@@ -97,7 +97,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 title: const Text('Выйти из системы'),
                 onTap: () async {
                   await _authService.logout();
-                  if (mounted) context.go('/login');
+                  if (context.mounted) context.go('/login');
                 },
               ),
               ListTile(
