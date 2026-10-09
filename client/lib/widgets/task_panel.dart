@@ -114,14 +114,14 @@ class _TaskPanelState extends State<TaskPanel> {
                 margin: const EdgeInsets.only(bottom: 16),
                 width: 40,
                 height: 5,
-                decoration: BoxDecoration(color: Colors.grey.withOpacity(0.3), borderRadius: BorderRadius.circular(10)),
+                decoration: BoxDecoration(color: Colors.grey.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(10)),
               ),
             ),
             Row(
               children: [
                 Container(
                   padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: colorScheme.primary.withOpacity(0.12), borderRadius: BorderRadius.circular(12)),
+                  decoration: BoxDecoration(color: colorScheme.primary.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
                   child: Icon(isEditing ? Icons.edit_rounded : Icons.add_task_rounded, color: colorScheme.primary),
                 ),
                 const SizedBox(width: 12),
