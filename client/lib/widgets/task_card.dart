@@ -40,7 +40,7 @@ class TaskCard extends StatelessWidget {
         color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 3)),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, 3)),
         ],
       ),
       child: Column(
@@ -51,7 +51,7 @@ class TaskCard extends StatelessWidget {
             children: [
               Container(
                 padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: colorScheme.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                decoration: BoxDecoration(color: colorScheme.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
                 child: Icon(Icons.assignment_turned_in_rounded, color: colorScheme.primary, size: 20),
               ),
               const SizedBox(width: 10),
@@ -89,7 +89,7 @@ class TaskCard extends StatelessWidget {
           if (task.subtasks.isNotEmpty) _buildSubtasksArea(context, task.subtasks, task.id),
 
           const SizedBox(height: 12),
-          Divider(height: 1, color: Colors.grey.withOpacity(0.2)),
+          Divider(height: 1, color: Colors.grey.withValues(alpha: 0.2)),
           const SizedBox(height: 12),
           _buildActionArea(task.status, isMeAccepted, hasPartnerAccepted, task.id),
         ],
@@ -107,7 +107,7 @@ class TaskCard extends StatelessWidget {
       margin: const EdgeInsets.only(top: 12),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: Colors.grey.withOpacity(0.05),
+        color: Colors.grey.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
@@ -173,7 +173,7 @@ class TaskCard extends StatelessWidget {
   Widget _buildDeadlineBadge(DateTime deadline) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-      decoration: BoxDecoration(color: Colors.red.withOpacity(0.08), borderRadius: BorderRadius.circular(6)),
+      decoration: BoxDecoration(color: Colors.red.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(6)),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -194,7 +194,7 @@ class TaskCard extends StatelessWidget {
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
       child: Text(text, style: TextStyle(fontSize: 10, color: color, fontWeight: FontWeight.w800)),
     );
   }
