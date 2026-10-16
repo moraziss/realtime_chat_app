@@ -1,5 +1,7 @@
 # Real-time Chat & Task Manager
 
+[![client](https://github.com/moraziss/realtime_chat_app/actions/workflows/client.yml/badge.svg?branch=main)](https://github.com/moraziss/realtime_chat_app/actions/workflows/client.yml)
+
 Монорепозиторий из двух частей: бэкенд на Go и клиент на Flutter (Android, Windows, web).
 
 ```text
